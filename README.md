@@ -1,8 +1,11 @@
 # Better SMS
 
 > **版本**：v1.3 / *v1.4 Beta*
+> 
 > **作者**：LTF
+> 
 > **適用平台**：電腦 Google Chrome / Chromium 系列瀏覽器
+> 
 > **目標對象**：東華三院李嘉誠中學學生
 
 ---
