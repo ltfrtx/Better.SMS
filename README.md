@@ -50,17 +50,6 @@
 
 ---
 
-## 🏷️ 支援選修科與數學組別
-
-| 類別 | 支援項目與對應教師編號 |
-| :--- | :--- |
-| **Math** | Gp1 (CPC), Gp2 (SYT), Gp3 (AWY), Gp4 (NOK), Gp5 (TKP), Gp6 (HWS)|
-| **X1** | PHY (LWY), CHEM (LCO), HIST (TKY), CHIS (HKC), JAP (ATH), ECON (TYN)|
-| **X2** | BAFS (TPY), BIO (YSL), CHEM (PTW), CHIS (WCL), TH (CLY), VA (LNF) |
-| **X3** | BIO (NWK), ECON (LYK), GEOG (LHH), HIST (ATH), ICT (YMT), PHY (FHM) |
-
----
-
 ## 🙏 致謝 (Credits)
 
 > Google Gemini 3.6 Flash Extended（邏輯與建議）、GPT 6 Astra（訊息範本最佳化）
