@@ -42,11 +42,11 @@
 
 ## 🛠️ 安裝教學
 
-1. 下載本專案原始碼並解壓縮。
-2. 開啟 Chrome 瀏覽器，前往 `chrome://extensions/`。
-3. 開啟右上角 **「開發者模式 (Developer mode)」**。
-4. 點擊 **「載入未打包擴充功能 (Load unpacked)」**，並選擇本套件資料夾。
-5. 開啟 https://sms.twghlkss.edu.hk/ 即可開始使用。
+> 1. 下載本專案原始碼並解壓縮。
+> 2. 開啟 Chrome 瀏覽器，前往 `chrome://extensions/`。
+> 3. 開啟右上角 **「開發者模式 (Developer mode)」**。
+> 4. 點擊 **「載入未打包擴充功能 (Load unpacked)」**，並選擇本套件資料夾。
+> 5. 開啟 https://sms.twghlkss.edu.hk/ 即可開始使用。
 
 ---
 
@@ -63,6 +63,6 @@
 
 ## 🙏 致謝 (Credits)
 
-Google Gemini 3.6 Flash Extended（邏輯與建議）、GPT 6 Astra（訊息範本最佳化）
+> Google Gemini 3.6 Flash Extended（邏輯與建議）、GPT 6 Astra（訊息範本最佳化）
 
 ---
