@@ -1,5 +1,4 @@
-# Abandoned
-# Better SMS
+# Better SMS - ABANDONED
 
 > **最新版本**：v1.2
 > 
