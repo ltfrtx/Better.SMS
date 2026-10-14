@@ -1,0 +1,30 @@
+{
+  "manifest_version": 3,
+  "name": "Better.SMS",
+  "short_name": "Better.SMS",
+  "version": "1.3.1",
+  "description": "A more reliable, multilingual homework companion for SMS.",
+  "permissions": ["activeTab", "storage"],
+  "host_permissions": ["https://sms.twghlkss.edu.hk/*"],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Better.SMS — 查看功課",
+    "default_icon": {
+      "16": "icon16.png",
+      "48": "icon48.png",
+      "128": "icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icon16.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://sms.twghlkss.edu.hk/student/*"],
+      "js": ["date-utils.js", "homework-parser.js", "content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
