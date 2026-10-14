@@ -135,19 +135,40 @@
             return isReminder ? 'reminder' : 'homework';
         }
 
-        // Prefer explicit route/page-heading signals, then fall back to the
-        // visible headings and table metadata. Generic navigation labels should
-        // not make a page look like the other list type.
-        for (const value of [context.pathname, context.pageTitle, context.primaryHeading]) {
+        // Page-specific headings and table containers outrank URLs: SMS can
+        // render multiple list tables under a shared student route, and a URL
+        // containing "homework" must not override a visible Reminder page.
+        const primaryHeadingKind = kindIn(context.primaryHeading || '');
+        if (primaryHeadingKind) return primaryHeadingKind;
+
+        const tableKinds = new Set(tableMetadata.map(kindIn).filter(Boolean));
+        if (tableKinds.size === 1) return [...tableKinds][0];
+
+        const headingKinds = new Set(headings.map(kindIn).filter(Boolean));
+        if (headingKinds.size === 1) return [...headingKinds][0];
+
+        for (const value of [context.pageTitle, context.pathname]) {
             const kind = kindIn(value || '');
             if (kind) return kind;
         }
-
-        for (const candidates of [headings, tableMetadata]) {
-            const kinds = new Set(candidates.map(kindIn).filter(Boolean));
-            if (kinds.size === 1) return [...kinds][0];
-        }
         return 'unknown';
+    }
+
+    function selectTablesForListKind(tables, listKind) {
+        const tableModels = Array.isArray(tables) ? tables : [];
+        const tableKinds = tableModels.map(table => detectListKind({
+            tableMetadata: [table && table.metadata || '']
+        }));
+        const matchingTables = tableModels.filter((_table, index) => tableKinds[index] === listKind);
+        if (matchingTables.length > 0) return matchingTables;
+
+        // If the DOM contains typed tables but none belongs to the active list,
+        // only inspect untyped tables. This avoids accidentally parsing the
+        // homework table as reminders, or committing a blank wrong-list result.
+        if (tableKinds.some(kind => kind !== 'unknown')) {
+            return tableModels.filter((_table, index) => tableKinds[index] === 'unknown');
+        }
+        return tableModels;
     }
 
     function parseHomeworkTables(tables, referenceDate) {
@@ -256,6 +277,7 @@
                     : [];
                 tableDiagnostics.push({
                     tableIndex,
+                    container: oneLine(table && table.metadata).slice(0, 160),
                     headerRowIndex: headerMap ? headerMap.rowIndex : null,
                     columns: headerMap ? { ...headerMap.indexes } : null,
                     headerLabels,
@@ -278,7 +300,7 @@
         };
     }
 
-    const api = { parseHomeworkTables, cleanText, headerRole, detectListKind, storageKeyForListKind };
+    const api = { parseHomeworkTables, cleanText, headerRole, detectListKind, storageKeyForListKind, selectTablesForListKind };
     root.BetterSMSHomeworkParser = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(globalThis);

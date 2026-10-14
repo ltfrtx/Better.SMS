@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { parseHomeworkTables, detectListKind, storageKeyForListKind } = require('../homework-parser.js');
+const { parseHomeworkTables, detectListKind, storageKeyForListKind, selectTablesForListKind } = require('../homework-parser.js');
 
 const referenceDate = new Date(2026, 9, 1);
 
@@ -156,6 +156,46 @@ test('classifies Reminder and 提醒 pages separately from homework', () => {
     assert.equal(detectListKind({ headings: ['提醒', 'Homework'] }), 'unknown');
     assert.equal(detectListKind({ primaryHeading: '提醒', headings: ['提醒', 'Homework'] }), 'reminder');
     assert.equal(detectListKind({ headings: ['4E CLASS'] }), 'unknown');
+});
+
+test('prioritizes Reminder headings and reminder containers over a homework URL', () => {
+    assert.equal(detectListKind({
+        pathname: '/student/homework',
+        headings: ['4E 班', '提醒']
+    }), 'reminder');
+    assert.equal(detectListKind({
+        pathname: '/student/homework',
+        headings: ['4E 班', '提醒'],
+        tableMetadata: [
+            'section.student-homework-table',
+            'section.student-reminder-table'
+        ]
+    }), 'reminder');
+    assert.equal(detectListKind({
+        pathname: '/student/homework',
+        headings: ['提醒', 'Homework'],
+        tableMetadata: ['main section.student-reminder-table.student-reminder-table-full']
+    }), 'reminder');
+    assert.equal(detectListKind({
+        pathname: '/student/homework',
+        tableMetadata: ['main section.student-reminder-table']
+    }), 'reminder');
+});
+
+test('selects only matching list tables when both are present in the DOM', () => {
+    const homeworkTable = { metadata: 'section.student-homework-table', rows: [] };
+    const reminderTable = { metadata: 'section.student-reminder-table', rows: [] };
+    const tables = [homeworkTable, reminderTable];
+
+    assert.deepEqual(selectTablesForListKind(tables, 'homework'), [homeworkTable]);
+    assert.deepEqual(selectTablesForListKind(tables, 'reminder'), [reminderTable]);
+});
+
+test('preserves untyped tables but excludes a marked opposite-list table', () => {
+    const homeworkTable = { metadata: 'section.student-homework-table', rows: [] };
+    const unknownTable = { metadata: 'table.data-grid', rows: [] };
+    assert.deepEqual(selectTablesForListKind([homeworkTable, unknownTable], 'reminder'), [unknownTable]);
+    assert.deepEqual(selectTablesForListKind([unknownTable], 'reminder'), [unknownTable]);
 });
 
 test('routes reminder and homework data to separate storage keys', () => {

@@ -36,9 +36,34 @@
         return true;
     }
 
+    function tableContextMetadata(table) {
+        function elementIdentity(element) {
+            return [
+                element.id,
+                element.getAttribute('class') || '',
+                element.getAttribute('aria-label') || '',
+                element.getAttribute('summary') || ''
+            ].filter(Boolean).join(' ');
+        }
+
+        const ownIdentity = elementIdentity(table);
+        let element = table.parentElement;
+        let depth = 0;
+        while (element && element.nodeType === 1 && depth < 6) {
+            const identity = elementIdentity(element);
+            if (/(?:^|[^a-z0-9])(?:reminders?|homework|assignments?)(?:$|[^a-z0-9])|提醒|功課|功课|作業|作业/i.test(identity)) {
+                return [ownIdentity, identity].filter(Boolean).join(' ');
+            }
+            element = element.parentElement;
+            depth += 1;
+        }
+        return ownIdentity;
+    }
+
     function readTables() {
         const tableElements = Array.from(document.querySelectorAll('table')).filter(isVisible);
         const tableModels = tableElements.map(table => ({
+            metadata: tableContextMetadata(table),
             rows: Array.from(table.rows).map(row => ({
                 cells: Array.from(row.cells).map(cell => ({
                     text: cell.innerText != null ? cell.innerText : cell.textContent,
@@ -75,7 +100,6 @@
         const body = document.body;
         const bodyText = body ? (body.innerText || body.textContent || '') : '';
         const { tableElements, tableModels } = readTables();
-        const parsed = BetterSMSHomeworkParser.parseHomeworkTables(tableModels, new Date());
         const language = (document.documentElement && document.documentElement.lang) ||
             (navigator.language || '');
         const headings = Array.from(document.querySelectorAll('h1, h2, h3, h4, h5, [role="heading"]'))
@@ -87,12 +111,7 @@
         const primaryHeading = primaryHeadingElement
             ? cleanPageText(primaryHeadingElement.innerText || primaryHeadingElement.textContent)
             : '';
-        const tableMetadata = tableElements.map(table => [
-            table.id,
-            typeof table.className === 'string' ? table.className : '',
-            table.getAttribute('aria-label') || '',
-            table.getAttribute('summary') || ''
-        ].filter(Boolean).join(' '));
+        const tableMetadata = tableModels.map(table => table.metadata);
         const listKind = BetterSMSHomeworkParser.detectListKind({
             pathname: `${location.pathname} ${location.search || ''}`,
             pageTitle: document.title,
@@ -100,6 +119,11 @@
             headings,
             tableMetadata
         });
+        // Some SMS pages keep both list tables in the DOM. Select the table
+        // whose containing section identifies it as the active list, instead
+        // of merging homework rows into reminders (or the reverse).
+        const tablesToParse = BetterSMSHomeworkParser.selectTablesForListKind(tableModels, listKind);
+        const parsed = BetterSMSHomeworkParser.parseHomeworkTables(tablesToParse, new Date());
         const noRecordsMessage = hasExplicitNoRecordsMessage(bodyText, listKind);
         const detentionInfo = readDetentionInfo(bodyText);
         const fingerprint = JSON.stringify({
@@ -107,6 +131,7 @@
             listKind,
             noRecordsMessage,
             detentionInfo,
+            tableMetadata,
             tables: tableModels.map(table => table.rows.map(row => row.cells.map(cell => cleanPageText(cell.text))))
         });
 
