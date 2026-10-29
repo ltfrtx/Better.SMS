@@ -149,6 +149,10 @@
             return;
         }
 
+        const overview = element('div', 'analysis-overview');
+        const facts = element('div', 'analysis-facts');
+        overview.appendChild(facts);
+        container.appendChild(overview);
         const hero = element('div', 'analysis-hero');
         const estimatedLabel = summary.unknownCount ? '已知時數估算完成' : '預計完成時間';
         hero.appendChild(element('div', 'analysis-hero-label', estimatedLabel));
@@ -163,7 +167,7 @@
         const note = element('div', 'analysis-hero-note');
         note.id = 'analysis-hero-note';
         hero.appendChild(note);
-        container.appendChild(hero);
+        facts.appendChild(hero);
         container.__analysisRecords = Array.isArray(records) ? records.slice() : [];
         updateClock(container, options.now || new Date());
 
@@ -174,18 +178,18 @@
         const total = element('strong', '', analysis.formatDuration(summary.totalMinutes));
         total.id = 'analysis-total';
         minuteMetric.append(element('small', '', '已知總時間'), total);
-        metrics.append(taskMetric, minuteMetric); container.appendChild(metrics);
+        metrics.append(taskMetric, minuteMetric); facts.appendChild(metrics);
 
         if (summary.unknownCount) {
-            container.appendChild(element('p', 'analysis-alert', `有 ${summary.unknownCount} 項時間未能辨識，未計入總時數；完成時間並非完整估算。`));
+            facts.appendChild(element('p', 'analysis-alert', `有 ${summary.unknownCount} 項時間未能辨識，未計入總時數；完成時間並非完整估算。`));
         }
         if (summary.zeroCount) {
-            container.appendChild(element('p', 'analysis-note', `${summary.zeroCount} 項顯示 0 分鐘，按 SMS 原值計算。`));
+            facts.appendChild(element('p', 'analysis-note', `${summary.zeroCount} 項顯示 0 分鐘，按 SMS 原值計算。`));
         }
 
         const chart = element('div', 'analysis-chart');
         chart.append(donut(summary), makeLegend(summary.groups));
-        container.appendChild(chart);
+        overview.appendChild(chart);
         const top = summary.groups.find(group => group.minutes > 0);
         if (top) {
             const ties = summary.groups.filter(group => group.minutes === top.minutes).map(group => group.subject);

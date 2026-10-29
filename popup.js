@@ -5,7 +5,32 @@
     const DATE = BetterSMSDateUtils;
     const SUBJECT = BetterSMSSubjectFilter;
     const CLIENT = BetterSMSSmsClient;
-    const VERSION = '1.8.0';
+    const VERSION = '1.8.1';
+
+    // A fixed 800×600 root lets Chrome's action popup open at its maximum size.
+    // If Chrome clamps the popup on a smaller/zoomed screen, fit the available
+    // viewport after the initial sizing pass instead of creating scrollbars on
+    // the outer viewport. The body remains the only vertical scroll container.
+    function fitAvailablePopupSpace() {
+        const html = document.documentElement;
+        if (html.classList.contains('constrained-screen') || (window.innerWidth >= 800 && window.innerHeight >= 600)) return;
+        // Preserve the available width, and temporarily subtract any browser
+        // scrollbar gutter from the height. Concrete values prevent Chrome's
+        // popup auto-sizer from shrinking indefinitely on percentage dimensions.
+        const width = window.innerWidth;
+        const height = Math.min(window.innerHeight, html.clientHeight);
+        if (width < 240 || height < 200) return;
+        html.style.setProperty('--fit-width', `${width}px`);
+        html.style.setProperty('--fit-height', `${height}px`);
+        html.classList.add('constrained-screen');
+        const desiredHeight = window.innerHeight;
+        // Once the outer scrollbars clear, restore the available height.
+        if (desiredHeight > height) setTimeout(() => html.style.setProperty('--fit-height', `${desiredHeight}px`), 120);
+    }
+    setTimeout(() => {
+        fitAvailablePopupSpace();
+        window.addEventListener('resize', fitAvailablePopupSpace);
+    }, 120);
     const SCHEMA_VERSION = 2;
     const DEFAULT_STATE = {
         dateFilter: 'ALL', customDate: '', fromDate: '',
