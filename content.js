@@ -1,7 +1,7 @@
 /**
  * @Extension Fuck.SMS
  * @description Better SMS
- * @version 1.3
+ * @version 1.4 beta
  * @author LTF
  *
  * FIXED:

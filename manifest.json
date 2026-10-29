@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Fuck.SMS",
-  "version": "1.3",
-  "description": "v1.3 release",
+  "version": "1.4",
+  "description": "v1.4 beta - may contain bugs or errors",
   "permissions": ["activeTab", "scripting", "storage"],
   "host_permissions": ["https://sms.twghlkss.edu.hk/*"],
   "action": {

@@ -2,10 +2,10 @@
  * @Extension Fuck.SMS
  * @Filetype Database
  * @description Better SMS
- * @version 1.3
+ * @version 1.4 beta
  * @author LTF
  * @copyright Copyright (c) 2026 LTF IT Team. All rights reserved.
- * @credits Special thanks to Google Gemini 3.6 Flash Extended for suggestions and GPT 6 Astra for optimizing the professional message templates.
+ * @credits Special thanks to Google Gemini 3.6 Flash Extended for suggestions and GPT 5.5 for optimizing the professional message templates.
  *
  * FIXED:
  *  - Sync badge now reflects reality: 🔴 never synced / 🟢 synced / 🟠 stale.
@@ -13,6 +13,7 @@
  *    tab, runs the scraper, merges the results and saves them.
  *  - Popup re-renders live when content.js writes new data (storage.onChanged).
  *  - parseHWDate accepts d/m/yyyy, dd-mm-yyyy and yyyy-mm-dd.
+ *  - Default date filter set to "NEXT_SCHOOL_DAY".
  */
 
 const SMS_ORIGIN = "https://sms.twghlkss.edu.hk/";
@@ -20,7 +21,7 @@ const STALE_MS = 24 * 60 * 60 * 1000;
 
 let rawHomeworkList = [];
 let completedHomeworkMap = {};
-let savedState = { dateFilter: 'ALL', student: 'CUSTOM', mathGroup: 'ALL', x1: 'ALL', x2: 'ALL', x3: 'ALL' };
+let savedState = { dateFilter: 'NEXT_SCHOOL_DAY', student: 'CUSTOM', mathGroup: 'ALL', x1: 'ALL', x2: 'ALL', x3: 'ALL' };
 
 // Database
 const STUDENTS_DATABASE = [];
@@ -195,6 +196,12 @@ document.addEventListener('DOMContentLoaded', () => {
     ['savedState', 'homeworkList', 'completedHomeworkMap', 'lastUpdated', 'syncedAt', 'syncError', 'syncSource'],
     (result) => {
       if (result.savedState) savedState = { ...savedState, ...result.savedState };
+
+      // 自動將舊紀錄中已刪除的 'ALL'、'TODAY' 或空值重置為 'NEXT_SCHOOL_DAY'
+      if (!savedState.dateFilter || savedState.dateFilter === 'ALL' || savedState.dateFilter === 'TODAY') {
+        savedState.dateFilter = 'NEXT_SCHOOL_DAY';
+      }
+
       rawHomeworkList = result.homeworkList || [];
       completedHomeworkMap = result.completedHomeworkMap || {};
 
