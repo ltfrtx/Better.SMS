@@ -3,7 +3,7 @@
 Chrome／Chromium 擴充功能，從 SMS 學生頁面整理功課，並支援日期及科目篩選。
 
 **版本：** 1.3.*0* Beta<br>
-**支援頁面：** `https://sms.twghlkss.edu.hk/student/*`
+**支援頁面：** `[https://sms.twghlkss.edu.hk/student/*](https://sms.twghlkss.edu.hk/student/records.php?feature=homework)`
 
 ## 最近更新
 
