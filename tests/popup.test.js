@@ -8,7 +8,7 @@ const { parseDocument } = require('../sms-document.js');
 const root = path.join(__dirname, '..');
 const popupHTML = fs.readFileSync(path.join(root, 'popup.html'), 'utf8');
 const fixture = fs.readFileSync(path.join(__dirname, 'fixtures/sms-synthetic.html'), 'utf8');
-const scripts = ['date-utils.js', 'homework-parser.js', 'sms-document.js', 'sms-client.js', 'subject-filter.js', 'popup.js'];
+const scripts = ['date-utils.js', 'homework-parser.js', 'sms-document.js', 'sms-client.js', 'subject-filter.js', 'analysis-utils.js', 'analysis-ui.js', 'popup.js'];
 const clone = value => JSON.parse(JSON.stringify(value));
 const sampleProfile = { x1: 'PHY', x2: 'CHEM', x3: 'ICT', mathGroup: 'Gp6', modules: 'NONE', dateFilter: 'ALL' };
 
@@ -263,4 +263,97 @@ test('teacher-priority filtering applies independently to homework and reminders
     assert.match(app.doc.querySelector('#hw-list').textContent, /wrong-label example/);
     assert.match(app.doc.querySelector('#hw-list').textContent, /依老師歸入 X3/);
     assert.match(app.doc.querySelector('#reminder-list').textContent, /wrong-label example/);
+});
+
+test('Beta donut uses only filtered incomplete homework and updates after completion', async t => {
+    const app = makePopup({ store: { savedState: sampleProfile } });
+    t.after(() => app.dom.window.close());
+    const { doc } = app;
+    await waitFor(() => doc.querySelector('#sync-status').classList.contains('synced'));
+    assert.equal(doc.querySelector('#settings-panel').contains(doc.querySelector('#analysis-tools')), true);
+    assert.match(doc.querySelector('#analysis-tools summary').textContent, /測試版/);
+    doc.querySelector('#settings-button').click();
+    doc.querySelector('#analysis-tools summary').click();
+    await waitFor(() => doc.querySelector('#analysis-total'));
+    assert.equal(doc.querySelector('#analysis-total').textContent, '1 小時 10 分鐘');
+    assert.equal(doc.querySelectorAll('#analysis-content .analysis-task').length, 3);
+    assert.equal(doc.querySelectorAll('#analysis-content .analysis-arc').length, 3);
+    assert.doesNotMatch(doc.querySelector('#analysis-content').textContent, /fictional physics reminder/);
+    assert.match(doc.querySelector('#analysis-content').textContent, /不計休息/);
+    doc.querySelector('#settings-close').click();
+    doc.querySelector('#hw-list .hw-checkbox').click(); // 10 minute Chinese task
+    doc.querySelector('#settings-button').click();
+    await waitFor(() => doc.querySelector('#analysis-total') && doc.querySelector('#analysis-total').textContent === '1 小時');
+    assert.equal(doc.querySelectorAll('#analysis-content .analysis-task').length, 2);
+});
+
+test('Beta marks missing durations and never represents the known subtotal as a complete estimate', async t => {
+    const extra = '<tr><td>02/11/2026</td><td>9</td><td>Mathematics</td><td>Gp6 unknown time</td><td>全日</td><td>HWS</td></tr>';
+    const html = fixture.replace('</tbody>', `${extra}</tbody>`);
+    const app = makePopup({ html, store: { savedState: sampleProfile } });
+    t.after(() => app.dom.window.close());
+    const { doc } = app;
+    await waitFor(() => doc.querySelector('#sync-status').classList.contains('synced'));
+    doc.querySelector('#settings-button').click();
+    doc.querySelector('#analysis-tools summary').click();
+    await waitFor(() => doc.querySelector('#analysis-total'));
+    assert.equal(doc.querySelector('#analysis-total').textContent, '1 小時 10 分鐘');
+    assert.equal(doc.querySelectorAll('#analysis-content .analysis-task').length, 4);
+    assert.match(doc.querySelector('#analysis-content').textContent, /1 項時間未能辨識/);
+    assert.match(doc.querySelector('#analysis-content').textContent, /並非完整估算/);
+    assert.equal(doc.querySelector('#analysis-content .analysis-hero-label').textContent, '已知時數估算完成');
+});
+
+test('Beta analysis respects the selected date and never counts reminder entries', async t => {
+    const extra = '<tr><td>03/11/2026</td><td>9</td><td>Mathematics</td><td>Gp6 later assignment</td><td>20 分鐘</td><td>HWS</td></tr>';
+    const app = makePopup({ html: fixture.replace('</tbody>', `${extra}</tbody>`), store: { savedState: sampleProfile } });
+    t.after(() => app.dom.window.close());
+    const { doc } = app;
+    await waitFor(() => doc.querySelector('#sync-status').classList.contains('synced'));
+    doc.querySelector('#date-accordion summary').click();
+    doc.querySelector('#custom-date').value = '2026-11-03';
+    doc.querySelector('#apply-custom-date').click();
+    await waitFor(() => doc.querySelector('#date-filter-summary').textContent === '指定：2026-11-03');
+    doc.querySelector('#settings-button').click();
+    doc.querySelector('#analysis-tools summary').click();
+    await waitFor(() => doc.querySelector('#analysis-total'));
+    assert.equal(doc.querySelector('#analysis-total').textContent, '20 分鐘');
+    assert.equal(doc.querySelectorAll('#analysis-content .analysis-task').length, 1);
+    assert.match(doc.querySelector('#analysis-content').textContent, /Gp6 later assignment/);
+    assert.doesNotMatch(doc.querySelector('#analysis-content').textContent, /fictional joint lesson/);
+});
+
+test('Beta excludes the other Physics class from analysis and surfaces conflicts for the correct class', async t => {
+    const row = '<tr><td>03/11/2026</td><td>9</td><td>Physics</td><td>X1: FHM conflict task</td><td>180 分鐘</td><td>FHM</td></tr>';
+    const app = makePopup({ html: fixture.replace('</tbody>', `${row}</tbody>`), store: { savedState: sampleProfile } });
+    t.after(() => app.dom.window.close());
+    const { doc } = app;
+    await waitFor(() => doc.querySelector('#sync-status').classList.contains('synced'));
+    doc.querySelector('#settings-button').click(); doc.querySelector('#analysis-tools summary').click();
+    await waitFor(() => doc.querySelector('#analysis-total'));
+    assert.equal(doc.querySelector('#analysis-total').textContent, '1 小時 10 分鐘');
+    assert.doesNotMatch(doc.querySelector('#analysis-content').textContent, /FHM conflict task/);
+    doc.querySelector('#settings-close').click();
+    change(app.window, doc.querySelector('#profile-x3'), 'PHY');
+    doc.querySelector('#settings-button').click();
+    await waitFor(() => doc.querySelector('#analysis-total')?.textContent === '4 小時 10 分鐘');
+    assert.match(doc.querySelector('#analysis-content').textContent, /FHM conflict task/);
+    assert.match(doc.querySelector('#analysis-content').textContent, /依老師歸入 X3/);
+    assert.match(doc.querySelector('#analysis-content').textContent, /老師：FHM/);
+});
+
+test('Beta warns if analysis is based on an old cache after a sync error', async t => {
+    const data = snapshot('2020-01-01');
+    const app = makePopup({ redirectToLogin: true, store: {
+        savedState: { ...sampleProfile, fromDate: '2020-01-01' }, recordsSchemaVersion: 2,
+        homeworkList: data.homeworkList, reminderList: data.reminderList,
+        sourceStartDate: '2020-01-01', lastUpdated: '11/2 09:00', isSynced: true
+    } });
+    t.after(() => app.dom.window.close());
+    const { doc } = app;
+    await waitFor(() => doc.querySelector('#sync-status').classList.contains('error'));
+    doc.querySelector('#settings-button').click(); doc.querySelector('#analysis-tools summary').click();
+    await waitFor(() => doc.querySelector('#analysis-total'));
+    assert.match(doc.querySelector('#analysis-content').textContent, /使用上次成功資料/);
+    assert.equal(doc.querySelector('#analysis-total').textContent, '1 小時 10 分鐘');
 });

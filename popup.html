@@ -432,7 +432,10 @@
       border: 1px solid #cbd5e1; border-radius: 10px; background: #fff;
       box-shadow: 0 10px 30px rgba(15,23,42,.18); font-size: 12px;
     }
-    .settings-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+    .settings-header {
+      position: sticky; top: -13px; z-index: 2; display: flex; align-items: center; justify-content: space-between;
+      margin: -13px -13px 10px; padding: 13px 13px 9px; background: #fff; border-bottom: 1px solid #f1f5f9;
+    }
     .settings-header h3 { margin: 0; color: #0f172a; font-size: 14px; }
     .settings-close { border: 0; background: transparent; color: #64748b; cursor: pointer; font-size: 20px; line-height: 1; }
     .settings-panel fieldset { padding: 0; margin: 0; border: 0; }
@@ -447,13 +450,59 @@
     .settings-divider { border: 0; border-top: 1px solid #e2e8f0; margin: 12px 0; }
     .settings-date { display: flex; gap: 6px; }
     .settings-help { margin: 6px 0 0; color: #64748b; font-size: 11px; line-height: 1.5; }
+    .analysis-tools { border: 1px solid #dbe5ef; border-radius: 8px; background: #fff; overflow: hidden; }
+    .analysis-summary {
+      display: flex; align-items: center; justify-content: space-between; gap: 6px;
+      padding: 9px 10px; color: #0369a1; font-weight: 700; cursor: pointer;
+      user-select: none; list-style: none; background: #f0f9ff;
+    }
+    .analysis-summary::-webkit-details-marker { display: none; }
+    .analysis-summary:hover { background: #e0f2fe; }
+    .analysis-tools[open] .chevron-icon { transform: rotate(180deg); }
+    .beta-pill { display: inline-block; margin-left: 4px; padding: 2px 6px; border-radius: 8px; background: #fef3c7; color: #92400e; font-size: 10px; font-weight: 700; }
+    .analysis-content { padding: 10px; border-top: 1px solid #dbe5ef; }
+    .analysis-scope { margin: 0 0 8px; color: #64748b; font-size: 10px; line-height: 1.5; }
+    .analysis-empty { padding: 20px 8px; border-radius: 6px; background: #f8fafc; text-align: center; color: #64748b; font-size: 11px; line-height: 1.5; }
+    .analysis-hero { padding: 10px; border-radius: 8px; background: #eff8ff; border: 1px solid #d5edfb; }
+    .analysis-hero-label { font-size: 10px; color: #475569; font-weight: 600; }
+    .analysis-hero-time { display: flex; align-items: baseline; gap: 8px; margin: 3px 0; }
+    .analysis-hero-time strong { color: #0369a1; font-size: 23px; line-height: 1.1; letter-spacing: -.4px; }
+    .analysis-hero-time span { color: #475569; font-size: 11px; font-weight: 600; }
+    .analysis-hero-note { color: #64748b; font-size: 10px; line-height: 1.4; }
+    .analysis-metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 8px 0; }
+    .analysis-metric { padding: 7px 8px; border: 1px solid #e2e8f0; background: #f8fafc; border-radius: 6px; }
+    .analysis-metric small { display: block; margin-bottom: 3px; color: #64748b; font-size: 10px; }
+    .analysis-metric strong { color: #334155; font-size: 12px; }
+    .analysis-alert, .analysis-note { margin: 7px 0; padding: 6px 7px; border-radius: 5px; font-size: 10px; line-height: 1.45; }
+    .analysis-alert { background: #fffbeb; border: 1px solid #fde68a; color: #92400e; }
+    .analysis-note { background: #f8fafc; color: #64748b; }
+    .analysis-chart { display: flex; align-items: center; gap: 9px; margin: 10px 0; }
+    .analysis-donut { width: 112px; height: 112px; flex: 0 0 112px; }
+    .analysis-donut-number { fill: #0f172a; font: 700 18px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    .analysis-donut-unit { fill: #64748b; font: 10px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    .analysis-legend { min-width: 0; max-height: 145px; overflow: auto; list-style: none; padding: 0; margin: 0; flex: 1; }
+    .analysis-legend-row { display: flex; gap: 6px; align-items: flex-start; margin: 5px 0; }
+    .analysis-dot { display: block; flex: 0 0 8px; width: 8px; height: 8px; border-radius: 50%; margin-top: 3px; }
+    .analysis-legend-label { min-width: 0; color: #334155; font-size: 10px; overflow-wrap: anywhere; }
+    .analysis-legend-label strong, .analysis-legend-label small { display: block; }
+    .analysis-legend-label small { margin-top: 1px; color: #64748b; font-size: 10px; }
+    .analysis-insight { margin: 8px 0; padding: 6px 7px; color: #075985; background: #f0f9ff; border-radius: 5px; font-size: 10px; }
+    .analysis-list-heading { margin: 12px 0 6px; color: #475569; font-size: 11px; font-weight: 700; }
+    .analysis-task-list { max-height: 230px; overflow: auto; list-style: none; margin: 0; padding: 0; }
+    .analysis-task { padding: 7px 0; border-top: 1px solid #e2e8f0; }
+    .analysis-task-title { display: flex; justify-content: space-between; gap: 6px; color: #0369a1; font-size: 11px; }
+    .analysis-task-duration { flex: none; color: #475569; font-weight: 600; }
+    .analysis-task-content { color: #334155; font-size: 10px; line-height: 1.45; margin: 3px 0; white-space: pre-line; overflow-wrap: anywhere; }
+    .analysis-task-date { color: #64748b; font-size: 10px; }
+    .analysis-task-warning { margin-top: 4px; padding: 3px 5px; border-radius: 4px; background: #fffbeb; color: #92400e; font-size: 10px; line-height: 1.4; }
+
   </style>
 </head>
 <body>
   <div class="header">
     <div class="header-title-group">
       <h2 id="brand-title" tabindex="0">Better.SMS</h2>
-      <div class="author">V1.6.2</div>
+      <div class="author">V1.7.0_beta_alpha</div>
     </div>
     <span id="total-count" class="badge">0 項</span>
   </div>
@@ -567,14 +616,22 @@
     <div id="reminder-list"><div class="empty">載入中…</div></div>
   </section>
 
-  <button id="settings-button" class="settings-button" type="button" aria-label="顯示與載入設定" aria-controls="settings-panel" aria-haspopup="dialog" aria-expanded="false" title="顯示與載入設定">⚙</button>
-  <div id="settings-panel" class="settings-panel" role="dialog" aria-label="顯示與載入設定" hidden>
-    <div class="settings-header"><h3>顯示與載入設定</h3><button id="settings-close" class="settings-close" type="button" aria-label="關閉設定">×</button></div>
+  <button id="settings-button" class="settings-button" type="button" aria-label="Better.SMS 設定" aria-controls="settings-panel" aria-haspopup="dialog" aria-expanded="false" title="Better.SMS 設定">⚙</button>
+  <div id="settings-panel" class="settings-panel" role="dialog" aria-label="Better.SMS 設定" hidden>
+    <div class="settings-header"><h3>Better.SMS 設定</h3><button id="settings-close" class="settings-close" type="button" aria-label="關閉設定">×</button></div>
     <fieldset>
       <legend>功課與提醒的顯示方式</legend>
       <label class="layout-choice"><input type="radio" name="view-mode" value="tabs"><span><strong>頁籤模式</strong><small>切換查看功課或提醒</small></span></label>
       <label class="layout-choice"><input type="radio" name="view-mode" value="stacked"><span><strong>上下分區</strong><small>同時顯示兩個清單</small></span></label>
     </fieldset>
+    <hr class="settings-divider">
+    <details class="analysis-tools" id="analysis-tools">
+      <summary class="analysis-summary">
+        <span>◉ 功課時間分析 <span class="beta-pill">測試版</span></span>
+        <span class="chevron-icon" aria-hidden="true">▼</span>
+      </summary>
+      <div id="analysis-content" class="analysis-content"></div>
+    </details>
     <hr class="settings-divider">
     <div class="settings-label"><label for="fetch-from-date">SMS 載入起始日期</label></div>
     <div class="settings-date"><input id="fetch-from-date" type="date"><button id="apply-from-date" class="small-button" type="button">載入</button></div>
@@ -606,6 +663,8 @@
   <script src="sms-document.js"></script>
   <script src="sms-client.js"></script>
   <script src="subject-filter.js"></script>
+  <script src="analysis-utils.js"></script>
+  <script src="analysis-ui.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

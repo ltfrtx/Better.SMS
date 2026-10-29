@@ -5,7 +5,7 @@
     const DATE = BetterSMSDateUtils;
     const SUBJECT = BetterSMSSubjectFilter;
     const CLIENT = BetterSMSSmsClient;
-    const VERSION = '1.6.2';
+    const VERSION = '1.7.0_beta_alpha';
     const SCHEMA_VERSION = 2;
     const DEFAULT_STATE = {
         dateFilter: 'ALL', customDate: '', fromDate: '',
@@ -34,6 +34,7 @@
     let stateSaveQueue = Promise.resolve();
     let completedSaveQueue = Promise.resolve();
     let commitQueue = Promise.resolve();
+    let analysisTimer = null;
     const $ = id => document.getElementById(id);
 
     function normalizeState(input) {
@@ -162,6 +163,7 @@
                 if (checkbox.checked) completed[id] = true; else delete completed[id];
                 card.classList.toggle('completed', checkbox.checked);
                 saveCompleted();
+                renderAnalysis();
             });
             container.appendChild(card);
         });
@@ -178,6 +180,35 @@
         $('reminders-section-count').textContent = `${rem.length} 項`;
         $('total-count').textContent = `${state.viewMode === 'stacked' ? hw.length + rem.length : state.activeTab === 'homework' ? hw.length : rem.length} 項`;
         renderLayout();
+        renderAnalysis();
+    }
+
+    function renderAnalysis() {
+        const panel = $('settings-panel');
+        const tools = $('analysis-tools');
+        if (!panel || panel.hidden || !tools || !tools.open || !globalThis.BetterSMSAnalysisUI) return;
+        // Exactly the same date and subject selection as the homework list;
+        // reminders and completed homework never enter this calculation.
+        const pending = visibleRecords(homework)
+            .filter(({ item }) => !completed[uniqueId(item, 'homework')])
+            .map(({ item, warning }) => ({ ...item, analysisWarning: warning }));
+        const syncMessage = isFetching ? '正在同步，暫時使用上次成功資料。' :
+            lastSyncError ? '同步未成功，以下使用上次成功資料。' : '';
+        globalThis.BetterSMSAnalysisUI.render($('analysis-content'), pending, {
+            dataAvailable: cacheUsable,
+            filterLabel: $('date-filter-summary').textContent,
+            syncMessage,
+            now: new Date()
+        });
+    }
+
+    function updateAnalysisTimer() {
+        if (analysisTimer) clearInterval(analysisTimer);
+        analysisTimer = null;
+        if ($('analysis-tools').open && !$('settings-panel').hidden) {
+            renderAnalysis();
+            analysisTimer = setInterval(renderAnalysis, 60000);
+        }
     }
 
     function renderLayout() {
@@ -445,14 +476,16 @@
         const showSettings = open => {
             $('settings-panel').hidden = !open;
             $('settings-button').setAttribute('aria-expanded', String(open));
+            updateAnalysisTimer();
             if (open) $('settings-close').focus(); else $('settings-button').focus();
         };
+        $('analysis-tools').addEventListener('toggle', updateAnalysisTimer);
         $('settings-button').addEventListener('click', () => showSettings($('settings-panel').hidden));
         $('settings-close').addEventListener('click', () => showSettings(false));
         document.addEventListener('keydown', event => { if (event.key === 'Escape' && !$('settings-panel').hidden) showSettings(false); });
         document.addEventListener('click', event => {
             if (!$('settings-panel').hidden && !$('settings-panel').contains(event.target) && !$('settings-button').contains(event.target)) {
-                $('settings-panel').hidden = true; $('settings-button').setAttribute('aria-expanded', 'false');
+                $('settings-panel').hidden = true; $('settings-button').setAttribute('aria-expanded', 'false'); updateAnalysisTimer();
             }
         });
         $('apply-from-date').addEventListener('click', () => {

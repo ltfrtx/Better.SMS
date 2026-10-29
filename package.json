@@ -1,11 +1,11 @@
 {
   "name": "better-sms-extension",
-  "version": "1.6.2",
+  "version": "1.7.0",
   "private": true,
   "description": "Better.SMS Chrome extension and parser tests",
   "scripts": {
     "test": "node --test",
-    "check": "node --check content.js && node --check homework-parser.js && node --check date-utils.js && node --check sms-document.js && node --check sms-client.js && node --check subject-filter.js && node --check popup.js"
+    "check": "node --check content.js && node --check homework-parser.js && node --check date-utils.js && node --check sms-document.js && node --check sms-client.js && node --check subject-filter.js && node --check analysis-utils.js && node --check analysis-ui.js && node --check popup.js"
   },
   "devDependencies": {
     "jsdom": "^26.1.0"
