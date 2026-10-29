@@ -202,3 +202,49 @@ test('an in-flight later-date fetch is restarted when the user selects an earlie
     assert.equal(new URL(app.requests[1].url).searchParams.get('date'), '2022-01-01');
     assert.equal(app.requests[0].init.signal.aborted, true);
 });
+
+test('date controls start collapsed, show the saved selection, and remain functional when expanded', async t => {
+    const app = makePopup({ store: { savedState: { ...sampleProfile, dateFilter: 'NEXT_WEEK' } } });
+    t.after(() => app.dom.window.close());
+    const { doc, store } = app;
+    await waitFor(() => doc.querySelector('#sync-status').classList.contains('synced'));
+    const dateBox = doc.querySelector('#date-accordion');
+    assert.equal(dateBox.open, false);
+    assert.equal(doc.querySelector('#date-filter-summary').textContent, '下星期');
+    assert.equal(doc.querySelector('[data-date-filter="NEXT_WEEK"]').getAttribute('aria-pressed'), 'true');
+    dateBox.querySelector('summary').click();
+    assert.equal(dateBox.open, true);
+    doc.querySelector('[data-date-filter="TODAY"]').click();
+    assert.equal(doc.querySelector('#date-filter-summary').textContent, '今天');
+    await waitFor(() => store.savedState.dateFilter === 'TODAY');
+    dateBox.querySelector('summary').click();
+    assert.equal(dateBox.open, false);
+    assert.equal(doc.querySelector('#date-filter-summary').textContent, '今天');
+    dateBox.querySelector('summary').click();
+    doc.querySelector('#custom-date').value = '2020-01-01';
+    doc.querySelector('#apply-custom-date').click();
+    assert.equal(doc.querySelector('#date-filter-summary').textContent, '指定：2020-01-01');
+    await waitFor(() => store.sourceStartDate === '2020-01-01');
+});
+
+test('developer tools are inside the settings dialog and can still be enabled', async t => {
+    const app = makePopup({ store: { savedState: sampleProfile } });
+    t.after(() => app.dom.window.close());
+    const { doc, store } = app;
+    await waitFor(() => doc.querySelector('#sync-status').classList.contains('synced'));
+    const settings = doc.querySelector('#settings-panel');
+    const developer = doc.querySelector('#developer-tools');
+    assert.equal(settings.hidden, true);
+    assert.equal(settings.contains(developer), true);
+    assert.equal(developer.open, false);
+    doc.querySelector('#settings-button').click();
+    assert.equal(settings.hidden, false);
+    developer.querySelector('summary').click();
+    assert.equal(developer.open, true);
+    doc.querySelector('#dev-mode-toggle').click();
+    assert.equal(doc.querySelector('#dev-panel').hidden, false);
+    assert.equal(doc.querySelector('#dev-mode-state').textContent, '已啟用');
+    await waitFor(() => store.developerMode === true);
+    doc.querySelector('#settings-close').click();
+    assert.equal(settings.hidden, true);
+});

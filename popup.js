@@ -5,7 +5,7 @@
     const DATE = BetterSMSDateUtils;
     const SUBJECT = BetterSMSSubjectFilter;
     const CLIENT = BetterSMSSmsClient;
-    const VERSION = '1.6.0';
+    const VERSION = '1.6.1';
     const SCHEMA_VERSION = 2;
     const DEFAULT_STATE = {
         dateFilter: 'ALL', customDate: '', fromDate: '',
@@ -212,6 +212,12 @@
             button.classList.toggle('active', active);
             button.setAttribute('aria-pressed', String(active));
         });
+        const dateLabels = {
+            ALL: '全部已載入', TODAY: '今天', NEXT_SCHOOL_DAY: '下個上學天',
+            NEXT_7_DAYS: '未來 7 天', NEXT_WEEK: '下星期'
+        };
+        $('date-filter-summary').textContent = state.dateFilter === 'CUSTOM'
+            ? `指定：${state.customDate}` : dateLabels[state.dateFilter] || dateLabels.ALL;
         $('custom-date').value = state.customDate;
         $('fetch-from-date').value = state.fromDate || todayKey();
         renderLayout();

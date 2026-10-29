@@ -373,6 +373,24 @@
       color: #854d0e; background: #fffbeb; font-size: 11px; line-height: 1.5;
     }
     [hidden] { display: none !important; }
+    .date-box {
+      background: #fff; border: 1px solid #e2e8f0; border-radius: 8px;
+      margin-bottom: 10px; overflow: hidden;
+    }
+    .date-summary {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 8px 12px; color: #0369a1; font-size: 12px; font-weight: 700;
+      cursor: pointer; user-select: none; list-style: none;
+    }
+    .date-summary:hover { background: #f1f5f9; }
+    .date-summary::-webkit-details-marker { display: none; }
+    .date-current {
+      display: inline-block; margin-left: 6px; padding: 2px 7px; border-radius: 9px;
+      background: #e0f2fe; color: #0369a1; font-size: 11px; font-weight: 600;
+    }
+    .date-box[open] .chevron-icon { transform: rotate(180deg); }
+    .date-content { padding: 10px; border-top: 1px solid #e2e8f0; }
+    .date-content .custom-date-row { margin: 0; }
     .date-filter-group { display: grid; grid-template-columns: repeat(3, 1fr); }
     .date-btn { min-height: 30px; }
     .custom-date-row { display: flex; gap: 6px; align-items: center; margin: -3px 0 12px; font-size: 11px; color: #475569; }
@@ -435,7 +453,7 @@
   <div class="header">
     <div class="header-title-group">
       <h2 id="brand-title" tabindex="0">Better.SMS</h2>
-      <div class="author">V1.6.0</div>
+      <div class="author">V1.6.1</div>
     </div>
     <span id="total-count" class="badge">0 項</span>
   </div>
@@ -451,38 +469,28 @@
   </div>
   <div id="sync-message" class="message" role="status" hidden></div>
 
-  <details class="dev-tools" id="developer-tools">
-    <summary class="dev-summary">
-      <span>🛠 開發者模式</span>
-      <span id="dev-mode-state" class="dev-mode-state">關閉</span>
+
+
+  <details class="date-box" id="date-accordion">
+    <summary class="date-summary">
+      <span>日期篩選 <span id="date-filter-summary" class="date-current">全部已載入</span></span>
+      <span class="chevron-icon" aria-hidden="true">▼</span>
     </summary>
-    <div class="dev-content">
-      <label class="dev-toggle-row" for="dev-mode-toggle"><input id="dev-mode-toggle" type="checkbox">啟用開發者模式</label>
-      <p class="dev-help">顯示抓取診斷，並可手動重新抓取。診斷不包含功課或提醒內容。</p>
-      <div id="dev-panel" hidden>
-        <pre id="dev-diagnostics" class="dev-diagnostics">等待同步診斷資料…</pre>
-        <div class="dev-actions">
-          <button id="dev-refresh" type="button">重新抓取</button>
-          <button id="dev-copy" type="button">複製診斷資料</button>
-        </div>
-        <span id="dev-message" class="dev-message" aria-live="polite"></span>
+    <div class="date-content">
+      <div class="date-filter-group" aria-label="日期篩選">
+        <button type="button" class="date-btn active" data-date-filter="ALL">全部已載入</button>
+        <button type="button" class="date-btn" data-date-filter="TODAY">今天</button>
+        <button type="button" class="date-btn" data-date-filter="NEXT_SCHOOL_DAY" title="只跳過週末，未計算公眾假期或學校假期">下個上學天</button>
+        <button type="button" class="date-btn" data-date-filter="NEXT_7_DAYS" title="包括今天在內的 7 天">未來 7 天</button>
+        <button type="button" class="date-btn" data-date-filter="NEXT_WEEK" title="下一個星期一至星期日">下星期</button>
+      </div>
+      <div class="custom-date-row">
+        <label for="custom-date">指定日期：</label>
+        <input id="custom-date" type="date">
+        <button id="apply-custom-date" class="small-button" type="button">查看該日</button>
       </div>
     </div>
   </details>
-
-  <div class="section-title">日期篩選</div>
-  <div class="date-filter-group" aria-label="日期篩選">
-    <button type="button" class="date-btn active" data-date-filter="ALL">全部已載入</button>
-    <button type="button" class="date-btn" data-date-filter="TODAY">今天</button>
-    <button type="button" class="date-btn" data-date-filter="NEXT_SCHOOL_DAY" title="只跳過週末，未計算公眾假期或學校假期">下個上學天</button>
-    <button type="button" class="date-btn" data-date-filter="NEXT_7_DAYS" title="包括今天在內的 7 天">未來 7 天</button>
-    <button type="button" class="date-btn" data-date-filter="NEXT_WEEK" title="下一個星期一至星期日">下星期</button>
-  </div>
-  <div class="custom-date-row">
-    <label for="custom-date">指定日期：</label>
-    <input id="custom-date" type="date">
-    <button id="apply-custom-date" class="small-button" type="button">查看該日</button>
-  </div>
 
   <details class="profile-box" id="profile-accordion">
     <summary class="profile-summary">
@@ -572,6 +580,25 @@
     <div class="settings-date"><input id="fetch-from-date" type="date"><button id="apply-from-date" class="small-button" type="button">載入</button></div>
     <p class="settings-help">SMS 只返回這天及之後的資料。若篩選更早日期，會自動往前載入。下個上學天只跳過週末，未計算假期。</p>
     <p class="settings-help">資料及設定儲存在此瀏覽器；請勿與他人共用已登入的帳戶。</p>
+    <hr class="settings-divider">
+    <details class="dev-tools" id="developer-tools">
+      <summary class="dev-summary">
+        <span>🛠 開發者模式</span>
+        <span id="dev-mode-state" class="dev-mode-state">關閉</span>
+      </summary>
+      <div class="dev-content">
+        <label class="dev-toggle-row" for="dev-mode-toggle"><input id="dev-mode-toggle" type="checkbox">啟用開發者模式</label>
+        <p class="dev-help">顯示抓取診斷，並可手動重新抓取。診斷不包含功課或提醒內容。</p>
+        <div id="dev-panel" hidden>
+          <pre id="dev-diagnostics" class="dev-diagnostics">等待同步診斷資料…</pre>
+          <div class="dev-actions">
+            <button id="dev-refresh" type="button">重新抓取</button>
+            <button id="dev-copy" type="button">複製診斷資料</button>
+          </div>
+          <span id="dev-message" class="dev-message" aria-live="polite"></span>
+        </div>
+      </div>
+    </details>
   </div>
 
   <script src="date-utils.js"></script>
