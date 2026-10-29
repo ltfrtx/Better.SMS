@@ -1,532 +1,496 @@
-/**
- * @Extension Better.SMS
- * @Filetype Popup
- * @description Better SMS
- * @version 1.3.0
- * @author LTF
- * @copyright Copyright (c) 2026 LTF IT Team. All rights reserved.
- */
+/* global chrome, BetterSMSDateUtils, BetterSMSSubjectFilter, BetterSMSSmsClient */
+(function runBetterSMSPopup() {
+    'use strict';
 
+    const DATE = BetterSMSDateUtils;
+    const SUBJECT = BetterSMSSubjectFilter;
+    const CLIENT = BetterSMSSmsClient;
+    const VERSION = '1.6.0';
+    const SCHEMA_VERSION = 2;
+    const DEFAULT_STATE = {
+        dateFilter: 'ALL', customDate: '', fromDate: '',
+        student: 'CUSTOM', mathGroup: 'ALL', x1: 'ALL', x2: 'ALL', x3: 'ALL',
+        modules: 'ALL', viewMode: 'tabs', activeTab: 'homework'
+    };
+    // Retained from the original extension; every student can also use Custom.
+    const STUDENTS_DATABASE = [];
 
-let rawHomeworkList = [];
-let completedHomeworkMap = {};
-let lastUpdated = '';
-const DATE_UTILS = globalThis.BetterSMSDateUtils;
-let savedState = {
-    dateFilter: 'ALL',
-    student: 'CUSTOM',
-    mathGroup: 'ALL',
-    x1: 'ALL',
-    x2: 'ALL',
-    x3: 'ALL'
-};
-
-// Database
-const STUDENTS_DATABASE = [];
-
-const MATH_MAP = {
-    Gp1: { teacher: 'CPC', gp: 'GP1' },
-    Gp2: { teacher: 'SYT', gp: 'GP2' },
-    Gp3: { teacher: 'AWY', gp: 'GP3' },
-    Gp4: { teacher: 'NOK', gp: 'GP4' },
-    Gp5: { teacher: 'TKP', gp: 'GP5' },
-    Gp6: { teacher: 'HWS', gp: 'GP6' }
-};
-const ALL_MATH_TEACHERS = Object.values(MATH_MAP).map(m => m.teacher);
-
-const X1_MAP = {
-    PHY:  { teacher: 'LWY', names: ['PHYSICS', '物理'] },
-    CHEM: { teacher: 'LCO', names: ['CHEMISTRY', '化學'] },
-    HIST: { teacher: 'TKY', names: ['HISTORY', '歷史', 'HIST'] },
-    CHIS: { teacher: 'HKC', names: ['CHINESE HISTORY', '中史'] },
-    JAP:  { teacher: 'ATH', names: ['JAPANESE', '日語', '日文'] },
-    ECON: { teacher: 'TYN', names: ['ECONOMICS', '經濟'] }
-};
-const ALL_X1_TEACHERS = Object.values(X1_MAP).map(x => x.teacher);
-
-const X2_MAP = {
-    BAFS: { teacher: 'TPY', names: ['BAFS', '企會財'] },
-    BIO:  { teacher: 'YSL', names: ['BIOLOGY', '生物'] },
-    CHEM: { teacher: 'PTW', names: ['CHEMISTRY', '化學'] },
-    CHIS: { teacher: 'WCL', names: ['CHINESE HISTORY', '中史'] },
-    TH:   { teacher: 'CLY', names: ['TOURISM', '旅航', '旅遊', 'THS'] },
-    VA:   { teacher: 'LNF', names: ['VISUAL ARTS', '視藝', '視覺藝術', 'VAD'] }
-};
-const ALL_X2_TEACHERS = Object.values(X2_MAP).map(x => x.teacher);
-
-const X3_MAP = {
-    BIO:  { teacher: 'NWK', names: ['BIOLOGY', '生物'] },
-    ECON: { teacher: 'LYK', names: ['ECONOMICS', '經濟'] },
-    GEOG: { teacher: 'LHH', names: ['GEOGRAPHY', '地理'] },
-    HIST: { teacher: 'ATH', names: ['HISTORY', '歷史'] },
-    ICT:  { teacher: 'YMT', names: ['ICT', '資訊科技', '電腦'] },
-    PHY:  { teacher: 'FHM', names: ['PHYSICS', '物理'] }
-};
-const ALL_X3_TEACHERS = Object.values(X3_MAP).map(x => x.teacher);
-
-document.addEventListener('DOMContentLoaded', () => {
-    const profileAccordion = document.getElementById('profile-accordion');
-    const currentStudentTag = document.getElementById('current-student-tag');
-    const studentSelect = document.getElementById('profile-student');
-    const mathSelect = document.getElementById('profile-math');
-    const x1Select = document.getElementById('profile-x1');
-    const x2Select = document.getElementById('profile-x2');
-    const x3Select = document.getElementById('profile-x3');
-    const syncStatusEl = document.getElementById('sync-status');
-    const lastUpdatedEl = document.getElementById('last-updated');
-    const devModeToggle = document.getElementById('dev-mode-toggle');
-    const devModeState = document.getElementById('dev-mode-state');
-    const devPanel = document.getElementById('dev-panel');
-    const devDiagnostics = document.getElementById('dev-diagnostics');
-    const devMessage = document.getElementById('dev-message');
-    const brandTitle = document.getElementById('brand-title');
-
-    let syncDiagnostics = null;
-    let lastSyncError = '';
+    let state = { ...DEFAULT_STATE };
+    let homework = [];
+    let reminders = [];
+    let completed = {};
+    let cacheUsable = false;
+    let lastUpdated = '';
+    let sourceStartDate = '';
     let isSynced = null;
+    let lastSyncError = '';
+    let diagnostics = null;
     let developerMode = false;
+    let isFetching = false;
+    let uiMessage = '';
+    let requestNumber = 0;
+    let requestController = null;
+    let requestFromDate = '';
+    let stateSaveQueue = Promise.resolve();
+    let completedSaveQueue = Promise.resolve();
+    let commitQueue = Promise.resolve();
+    const $ = id => document.getElementById(id);
 
-    STUDENTS_DATABASE.forEach((stu, index) => {
-        const option = document.createElement('option');
-        option.value = String(index);
-        option.textContent = stu.name;
-        studentSelect.appendChild(option);
-    });
+    function normalizeState(input) {
+        const value = { ...DEFAULT_STATE, ...(input || {}) };
+        if (!['ALL', 'TODAY', 'NEXT_SCHOOL_DAY', 'NEXT_7_DAYS', 'NEXT_WEEK', 'CUSTOM'].includes(value.dateFilter)) value.dateFilter = 'ALL';
+        if (!DATE.fromDateKey(value.customDate)) value.customDate = '';
+        if (value.dateFilter === 'CUSTOM' && !value.customDate) value.dateFilter = 'ALL';
+        if (!DATE.fromDateKey(value.fromDate)) value.fromDate = '';
+        if (!Object.prototype.hasOwnProperty.call(SUBJECT.MATH, value.mathGroup)) value.mathGroup = 'ALL';
+        for (const block of ['x1', 'x2', 'x3']) {
+            if (!Object.prototype.hasOwnProperty.call(SUBJECT.ELECTIVES[block], value[block])) value[block] = 'ALL';
+        }
+        if (!['ALL', 'NONE', 'M1', 'M2', 'BOTH'].includes(value.modules)) value.modules = 'ALL';
+        if (!['tabs', 'stacked'].includes(value.viewMode)) value.viewMode = 'tabs';
+        if (!['homework', 'reminders'].includes(value.activeTab)) value.activeTab = 'homework';
+        if (value.student !== 'CUSTOM' && !STUDENTS_DATABASE[Number(value.student)]) value.student = 'CUSTOM';
+        return value;
+    }
 
-    function updateHeaderStudentName() {
-        const value = studentSelect.value;
-        if (value !== 'CUSTOM' && STUDENTS_DATABASE[value]) {
-            currentStudentTag.textContent = STUDENTS_DATABASE[value].name.split(' ')[0];
-        } else {
-            currentStudentTag.textContent = '自訂模式';
+    function storageGet(keys) {
+        return new Promise((resolve, reject) => chrome.storage.local.get(keys, result => {
+            const error = chrome.runtime.lastError;
+            if (error) reject(new Error(error.message)); else resolve(result || {});
+        }));
+    }
+    function storageSet(values) {
+        return new Promise((resolve, reject) => chrome.storage.local.set(values, () => {
+            const error = chrome.runtime.lastError;
+            if (error) reject(new Error(error.message)); else resolve();
+        }));
+    }
+    function saveState() {
+        const copy = { ...state };
+        stateSaveQueue = stateSaveQueue.catch(() => {}).then(() => storageSet({ savedState: copy })).catch(error => {
+            uiMessage = `設定未能儲存：${error.message}`;
+            renderStatus();
+        });
+    }
+    function saveCompleted() {
+        const copy = { ...completed };
+        completedSaveQueue = completedSaveQueue.catch(() => {}).then(() => storageSet({ completedHomeworkMap: copy })).catch(error => {
+            uiMessage = `完成狀態未能儲存：${error.message}`;
+            renderStatus();
+        });
+    }
+
+    function todayKey() { return DATE.toDateKey(new Date()); }
+
+    function expandForCurrentFilter() {
+        const range = DATE.getFilterRange(state.dateFilter, new Date(), state.customDate);
+        const earliestNeeded = range && range.start ? DATE.toDateKey(range.start) : '';
+        const preferred = state.fromDate || todayKey();
+        if (earliestNeeded && earliestNeeded < preferred) {
+            state.fromDate = earliestNeeded;
+            saveState();
+        }
+    }
+    function requestedFromDate() {
+        const preferred = DATE.fromDateKey(state.fromDate) ? state.fromDate : todayKey();
+        const range = DATE.getFilterRange(state.dateFilter, new Date(), state.customDate);
+        const required = range && range.start ? DATE.toDateKey(range.start) : '';
+        return required && required < preferred ? required : preferred;
+    }
+    function maybeFetchEarlier() {
+        expandForCurrentFilter();
+        $('fetch-from-date').value = state.fromDate || todayKey();
+        const required = requestedFromDate();
+        // A request already in flight might otherwise replace an older cache
+        // with a later range that cannot satisfy the newly selected date.
+        if (!cacheUsable || !sourceStartDate || required < sourceStartDate ||
+            (isFetching && requestFromDate && required < requestFromDate)) {
+            void syncRecords();
         }
     }
 
-    function renderSyncStatus() {
-        if (lastUpdatedEl) {
-            lastUpdatedEl.textContent = `最後更新：${lastUpdated || '尚未同步'}`;
-        }
-
-        if (isSynced === true) {
-            syncStatusEl.className = 'sync-badge synced';
-            syncStatusEl.textContent = '🟢 已同步';
-            syncStatusEl.removeAttribute('title');
-        } else if (lastSyncError) {
-            syncStatusEl.className = 'sync-badge error';
-            syncStatusEl.textContent = '⚠️ 抓取異常';
-            syncStatusEl.title = lastSyncError;
-        } else if (isSynced === false) {
-            syncStatusEl.className = 'sync-badge syncing';
-            syncStatusEl.textContent = '🟠 等待同步';
-            syncStatusEl.removeAttribute('title');
-        } else {
-            syncStatusEl.className = 'sync-badge pending';
-            syncStatusEl.textContent = '🟠 等待 SMS 頁面';
-            syncStatusEl.removeAttribute('title');
-        }
+    function escapeHtml(text) {
+        return String(text == null ? '' : text).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+    function uniqueId(item, kind) {
+        const oldId = `${item.date || ''}_${item.subject || ''}_${item.content || ''}_${item.teacher || ''}`;
+        // Preserve completion ticks from old versions for homework only.
+        return kind === 'homework' ? oldId : `reminder:${oldId}`;
     }
 
-    function renderDeveloperTools() {
-        devModeToggle.checked = developerMode;
-        devModeState.textContent = developerMode ? '已啟用' : '關閉';
-        devPanel.hidden = !developerMode;
-        devDiagnostics.textContent = syncDiagnostics
-            ? JSON.stringify(syncDiagnostics, null, 2)
-            : '尚未收到同步診斷資料。請開啟 SMS 學生頁面，或按「重新抓取」。';
-        if (lastSyncError && developerMode) {
-            devMessage.textContent = lastSyncError;
-        }
+    function visibleRecords(records) {
+        return records.reduce((all, item) => {
+            if (!DATE.matchesDateFilter(item, state.dateFilter, new Date(), state.customDate)) return all;
+            const decision = SUBJECT.evaluate(item, state);
+            if (decision.visible) all.push({ item, warning: decision.warning });
+            return all;
+        }, []);
     }
 
-    function applySavedState() {
-        const validDateFilters = ['ALL', 'TODAY', 'NEXT_SCHOOL_DAY', 'NEXT_7_DAYS'];
-        if (!validDateFilters.includes(savedState.dateFilter)) savedState.dateFilter = 'ALL';
-        const validStudent = savedState.student === 'CUSTOM' ||
-            (Number.isInteger(Number(savedState.student)) && STUDENTS_DATABASE[Number(savedState.student)]);
-        if (!validStudent) savedState.student = 'CUSTOM';
-
-        restoreDateFilterUI(savedState.dateFilter);
-        studentSelect.value = String(savedState.student ?? 'CUSTOM');
-        mathSelect.value = savedState.mathGroup || 'ALL';
-        x1Select.value = savedState.x1 || 'ALL';
-        x2Select.value = savedState.x2 || 'ALL';
-        x3Select.value = savedState.x3 || 'ALL';
-        updateHeaderStudentName();
-    }
-
-    function applyStorageResult(result) {
-        if (result.savedState) savedState = { ...savedState, ...result.savedState };
-        if (Array.isArray(result.homeworkList)) rawHomeworkList = result.homeworkList;
-        if (result.completedHomeworkMap && typeof result.completedHomeworkMap === 'object') {
-            completedHomeworkMap = result.completedHomeworkMap;
-        }
-        if (Object.prototype.hasOwnProperty.call(result, 'lastUpdated')) lastUpdated = result.lastUpdated || '';
-        if (Object.prototype.hasOwnProperty.call(result, 'isSynced')) isSynced = result.isSynced;
-        if (Object.prototype.hasOwnProperty.call(result, 'lastSyncError')) lastSyncError = result.lastSyncError || '';
-        if (Object.prototype.hasOwnProperty.call(result, 'syncDiagnostics')) syncDiagnostics = result.syncDiagnostics || null;
-        if (Object.prototype.hasOwnProperty.call(result, 'developerMode')) developerMode = Boolean(result.developerMode);
-
-        applySavedState();
-        renderSyncStatus();
-        renderDeveloperTools();
-        applyAllFilters();
-    }
-
-    chrome.storage.local.get([
-        'savedState', 'homeworkList', 'completedHomeworkMap', 'lastUpdated',
-        'isSynced', 'lastSyncError', 'syncDiagnostics', 'developerMode'
-    ], result => {
-        if (chrome.runtime.lastError) {
-            syncStatusEl.className = 'sync-badge error';
-            syncStatusEl.textContent = '⚠️ 無法讀取儲存資料';
+    function renderList(id, records, kind) {
+        const container = $(id);
+        container.replaceChildren();
+        if (!records.length) {
+            const empty = document.createElement('div');
+            empty.className = 'empty';
+            empty.textContent = cacheUsable
+                ? `沒有符合條件的${kind === 'homework' ? '功課' : '提醒'}。`
+                : '尚未成功載入資料，請登入 SMS 並重新整理。';
+            container.appendChild(empty);
             return;
         }
-        applyStorageResult(result);
-    });
-
-    chrome.storage.onChanged.addListener((changes, areaName) => {
-        if (areaName !== 'local') return;
-        const updated = {};
-        Object.keys(changes).forEach(key => {
-            if (key === 'savedState' || key === 'homeworkList' || key === 'completedHomeworkMap' ||
-                key === 'lastUpdated' || key === 'isSynced' || key === 'lastSyncError' ||
-                key === 'syncDiagnostics' || key === 'developerMode') {
-                updated[key] = changes[key].newValue;
-            }
+        records.forEach(({ item, warning }) => {
+            const id = uniqueId(item, kind);
+            const done = Boolean(completed[id]);
+            const card = document.createElement('div');
+            card.className = `hw-card${done ? ' completed' : ''}`;
+            card.innerHTML = `
+                <div class="hw-header">
+                    <label class="hw-check-title">
+                        <input type="checkbox" class="hw-checkbox" ${done ? 'checked' : ''}>
+                        <span class="subject">${escapeHtml(item.subject)}</span>
+                    </label>
+                    <span class="date-badge">📅 ${escapeHtml(item.date)}</span>
+                </div>
+                <div class="content">${escapeHtml(item.content)}</div>
+                ${warning ? `<div class="verify-note">⚠ ${escapeHtml(warning)}</div>` : ''}
+                <div class="footer"><span>⏱️ ${escapeHtml(item.time || '未指定時間')}</span><span>老師：${escapeHtml(item.teacher || '無')}</span></div>`;
+            const checkbox = card.querySelector('.hw-checkbox');
+            checkbox.setAttribute('aria-label', `標記${kind === 'homework' ? '功課' : '提醒'}完成：${item.subject || ''} ${item.date || ''}`);
+            checkbox.addEventListener('change', () => {
+                if (checkbox.checked) completed[id] = true; else delete completed[id];
+                card.classList.toggle('completed', checkbox.checked);
+                saveCompleted();
+            });
+            container.appendChild(card);
         });
-        if (!Object.keys(updated).length) return;
-        applyStorageResult(updated);
-    });
+    }
 
-    studentSelect.addEventListener('change', () => {
-        const selectedValue = studentSelect.value;
-        savedState.student = selectedValue;
+    function renderRecords() {
+        const hw = visibleRecords(homework);
+        const rem = visibleRecords(reminders);
+        renderList('hw-list', hw, 'homework');
+        renderList('reminder-list', rem, 'reminders');
+        $('tab-homework-count').textContent = String(hw.length);
+        $('tab-reminders-count').textContent = String(rem.length);
+        $('homework-section-count').textContent = `${hw.length} 項`;
+        $('reminders-section-count').textContent = `${rem.length} 項`;
+        $('total-count').textContent = `${state.viewMode === 'stacked' ? hw.length + rem.length : state.activeTab === 'homework' ? hw.length : rem.length} 項`;
+        renderLayout();
+    }
 
-        if (selectedValue !== 'CUSTOM') {
-            const student = STUDENTS_DATABASE[selectedValue];
-            if (student) {
-                mathSelect.value = student.math;
-                x1Select.value = student.x1;
-                x2Select.value = student.x2;
-                x3Select.value = student.x3;
-                savedState.mathGroup = student.math;
-                savedState.x1 = student.x1;
-                savedState.x2 = student.x2;
-                savedState.x3 = student.x3;
-            }
+    function renderLayout() {
+        const tabs = state.viewMode === 'tabs';
+        $('list-tabs').hidden = !tabs;
+        for (const name of ['homework', 'reminders']) {
+            const selected = name === state.activeTab;
+            const tab = $(`tab-${name}`);
+            const section = $(`${name}-section`);
+            const heading = $(`${name}-heading`);
+            tab.setAttribute('aria-selected', String(selected));
+            tab.tabIndex = selected ? 0 : -1;
+            section.hidden = tabs && !selected;
+            heading.hidden = tabs;
+            section.setAttribute('role', tabs ? 'tabpanel' : 'region');
+            section.setAttribute('aria-labelledby', tabs ? `tab-${name}` : `${name}-heading`);
         }
+        document.querySelectorAll('input[name="view-mode"]').forEach(radio => { radio.checked = radio.value === state.viewMode; });
+    }
 
-        updateHeaderStudentName();
-        saveCurrentState();
-        applyAllFilters();
-        if (profileAccordion) profileAccordion.removeAttribute('open');
-    });
-
-    [mathSelect, x1Select, x2Select, x3Select].forEach(select => {
-        select.addEventListener('change', () => {
-            studentSelect.value = 'CUSTOM';
-            savedState.student = 'CUSTOM';
-            savedState.mathGroup = mathSelect.value;
-            savedState.x1 = x1Select.value;
-            savedState.x2 = x2Select.value;
-            savedState.x3 = x3Select.value;
-            updateHeaderStudentName();
-            saveCurrentState();
-            applyAllFilters();
+    function renderControls() {
+        const student = state.student !== 'CUSTOM' ? STUDENTS_DATABASE[Number(state.student)] : null;
+        $('profile-student').value = String(state.student);
+        $('current-student-tag').textContent = student ? student.name.split(' ')[0] : '自訂模式';
+        $('profile-math').value = state.mathGroup;
+        $('profile-x1').value = state.x1;
+        $('profile-x2').value = state.x2;
+        $('profile-x3').value = state.x3;
+        $('profile-modules').value = state.modules;
+        document.querySelectorAll('.date-btn').forEach(button => {
+            const active = button.dataset.dateFilter === state.dateFilter;
+            button.classList.toggle('active', active);
+            button.setAttribute('aria-pressed', String(active));
         });
-    });
+        $('custom-date').value = state.customDate;
+        $('fetch-from-date').value = state.fromDate || todayKey();
+        renderLayout();
+    }
 
-    document.querySelectorAll('.date-btn').forEach(button => {
-        button.addEventListener('click', event => {
-            const filterType = event.currentTarget.dataset.dateFilter;
-            savedState.dateFilter = filterType;
-            restoreDateFilterUI(filterType);
-            saveCurrentState();
-            applyAllFilters();
-        });
-    });
+    function renderStatus() {
+        const badge = $('sync-status');
+        $('last-updated').textContent = `最後更新：${lastUpdated || '尚未同步'}`;
+        $('source-date').textContent = cacheUsable && sourceStartDate ? `載入範圍：${sourceStartDate} 起` : '尚未載入資料';
+        $('refresh').disabled = isFetching;
+        if (isFetching) {
+            badge.className = 'sync-badge syncing'; badge.textContent = '🟠 同步中…';
+        } else if (lastSyncError) {
+            badge.className = 'sync-badge error'; badge.textContent = '⚠️ 抓取異常';
+        } else if (isSynced && cacheUsable) {
+            badge.className = 'sync-badge synced'; badge.textContent = '🟢 已同步';
+        } else {
+            badge.className = 'sync-badge pending'; badge.textContent = '🟠 等待 SMS 頁面';
+        }
+        const message = uiMessage || (!isFetching && lastSyncError ? `${lastSyncError}${cacheUsable ? ' 下方顯示上次成功資料。' : ''}` : '');
+        $('sync-message').textContent = message;
+        $('sync-message').hidden = !message;
+    }
 
-    devModeToggle.addEventListener('change', () => {
-        developerMode = devModeToggle.checked;
-        renderDeveloperTools();
-        chrome.storage.local.set({ developerMode }, () => {
-            if (chrome.runtime.lastError) {
-                devMessage.textContent = `儲存設定失敗：${chrome.runtime.lastError.message}`;
-            } else {
-                devMessage.textContent = developerMode ? '開發者模式已啟用。' : '開發者模式已關閉。';
-            }
-        });
-    });
+    function renderDeveloper() {
+        $('dev-mode-toggle').checked = developerMode;
+        $('dev-mode-state').textContent = developerMode ? '已啟用' : '關閉';
+        $('dev-panel').hidden = !developerMode;
+        $('dev-diagnostics').textContent = diagnostics ? JSON.stringify(diagnostics, null, 2) : '尚未收到同步診斷資料。';
+    }
 
-    document.getElementById('dev-refresh').addEventListener('click', () => {
-        devMessage.textContent = '正在要求 SMS 頁面重新抓取…';
-        chrome.tabs.query({ active: true, currentWindow: true }, tabs => {
-            if (chrome.runtime.lastError || !tabs || !tabs[0] || tabs[0].id == null) {
-                devMessage.textContent = '無法取得目前分頁。請先開啟 SMS 學生頁面。';
-                return;
-            }
-            chrome.tabs.sendMessage(tabs[0].id, { type: 'BETTER_SMS_SCRAPE_NOW' }, response => {
+    function applyStored(values, initial = false) {
+        if (values.savedState) state = normalizeState(values.savedState);
+        if (values.completedHomeworkMap && typeof values.completedHomeworkMap === 'object') completed = values.completedHomeworkMap;
+        if (Object.prototype.hasOwnProperty.call(values, 'recordsSchemaVersion')) cacheUsable = values.recordsSchemaVersion === SCHEMA_VERSION;
+        if (cacheUsable) {
+            if (Array.isArray(values.homeworkList)) homework = values.homeworkList;
+            if (Array.isArray(values.reminderList)) reminders = values.reminderList;
+            if (Object.prototype.hasOwnProperty.call(values, 'sourceStartDate')) sourceStartDate = values.sourceStartDate || '';
+            if (Object.prototype.hasOwnProperty.call(values, 'lastUpdated')) lastUpdated = values.lastUpdated || '';
+            if (Object.prototype.hasOwnProperty.call(values, 'isSynced')) isSynced = values.isSynced;
+            if (Object.prototype.hasOwnProperty.call(values, 'lastSyncError')) lastSyncError = values.lastSyncError || '';
+            if (Object.prototype.hasOwnProperty.call(values, 'syncDiagnostics')) diagnostics = values.syncDiagnostics || null;
+        } else if (initial && Array.isArray(values.homeworkList) && values.homeworkList.length) {
+            // Old versions merged the two sections, so those rows cannot safely
+            // be presented as homework after the upgrade. Completion ticks stay.
+            lastSyncError = '舊版資料無法分辨功課和提醒，請登入 SMS 並重新整理。';
+        }
+        if (Object.prototype.hasOwnProperty.call(values, 'developerMode')) developerMode = Boolean(values.developerMode);
+        if (initial || values.savedState) renderControls();
+        renderRecords(); renderStatus(); renderDeveloper();
+    }
+
+    function formatTime(date) {
+        return `${date.getMonth() + 1}/${date.getDate()} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+    }
+
+    function querySmsTabs() {
+        return new Promise(resolve => chrome.tabs.query({ url: 'https://sms.twghlkss.edu.hk/student/*' }, tabs => {
+            if (chrome.runtime.lastError) resolve([]); else resolve(tabs || []);
+        }));
+    }
+    function askTab(tabId, fromDate) {
+        return new Promise((resolve, reject) => {
+            let settled = false;
+            const timer = setTimeout(() => {
+                if (!settled) { settled = true; reject(new Error('SMS 分頁沒有回應。')); }
+            }, 17000);
+            chrome.tabs.sendMessage(tabId, { type: 'BETTER_SMS_FETCH_RECORDS', fromDate }, response => {
+                if (settled) return;
+                settled = true; clearTimeout(timer);
                 const error = chrome.runtime.lastError;
-                if (error || !response || !response.ok) {
-                    devMessage.textContent = '找不到抓取程式。請重新載入 SMS 頁面後再試。';
-                } else {
-                    devMessage.textContent = '已要求重新抓取；診斷結果會在頁面穩定後更新。';
-                }
+                if (error || !response) reject(new Error('找不到 SMS 分頁的抓取程式。'));
+                else if (!response.ok) {
+                    const failure = new Error(response.error || 'SMS 分頁未能抓取資料。');
+                    failure.diagnostics = response.diagnostics || null;
+                    reject(failure);
+                } else resolve(response.data);
             });
         });
-    });
+    }
+    async function fetchViaTab(fromDate) {
+        const tabs = await querySmsTabs();
+        tabs.sort((a, b) => Number(Boolean(b.active)) - Number(Boolean(a.active)));
+        let lastError = null;
+        for (const tab of tabs) {
+            if (tab.id == null) continue;
+            try { return await askTab(tab.id, fromDate); } catch (error) { lastError = error; }
+        }
+        throw lastError || new Error('沒有已開啟的 SMS 學生分頁。');
+    }
 
-    document.getElementById('dev-copy').addEventListener('click', async () => {
-        const diagnosticText = JSON.stringify(syncDiagnostics || {
-            status: isSynced === true ? 'synced' : 'unknown',
-            error: lastSyncError,
-            lastUpdated: lastUpdated || null
-        }, null, 2);
+    function commitLatest(number, values) {
+        const pending = commitQueue.catch(() => {}).then(async () => {
+            if (number !== requestNumber) return false;
+            await storageSet(values);
+            if (number !== requestNumber) return false;
+            applyStored(values);
+            return true;
+        });
+        commitQueue = pending.catch(() => {});
+        return pending;
+    }
+
+    async function syncRecords() {
+        const number = ++requestNumber;
+        if (requestController) requestController.abort();
+        requestController = new AbortController();
+        const controller = requestController;
+        const from = requestedFromDate();
+        requestFromDate = from;
+        isFetching = true; uiMessage = ''; renderStatus();
+        let directError = null;
+        let source = 'extension';
         try {
-            if (navigator.clipboard && navigator.clipboard.writeText) {
-                await navigator.clipboard.writeText(diagnosticText);
-            } else {
-                const textarea = document.createElement('textarea');
-                textarea.value = diagnosticText;
-                textarea.style.position = 'fixed';
-                textarea.style.opacity = '0';
-                document.body.appendChild(textarea);
-                textarea.select();
-                const copied = document.execCommand('copy');
-                textarea.remove();
-                if (!copied) throw new Error('clipboard unavailable');
-            }
-            devMessage.textContent = '診斷資料已複製（不含功課內容）。';
-        } catch (_error) {
-            devMessage.textContent = '複製失敗，請手動選取診斷資料。';
-        }
-    });
-
-    // Hidden Easter egg: click the product name five times in quick succession.
-    let titleTapCount = 0;
-    let titleTapTimer = null;
-    let easterEggEnabled = false;
-    function countTitleTap() {
-        titleTapCount += 1;
-        clearTimeout(titleTapTimer);
-        titleTapTimer = setTimeout(() => { titleTapCount = 0; }, 1800);
-        if (titleTapCount < 5) return;
-        titleTapCount = 0;
-        easterEggEnabled = !easterEggEnabled;
-        brandTitle.textContent = easterEggEnabled ? 'Fuck.SMS' : 'Better.SMS';
-    }
-    brandTitle.addEventListener('click', countTitleTap);
-    brandTitle.addEventListener('keydown', event => {
-        if (event.key === 'Enter' || event.key === ' ') {
-            event.preventDefault();
-            countTitleTap();
-        }
-    });
-});
-
-function saveCurrentState() {
-    chrome.storage.local.set({ savedState });
-}
-
-function saveCompletedHomeworkMap() {
-    chrome.storage.local.set({ completedHomeworkMap });
-}
-
-function getHWUniqueId(hw) {
-    return `${hw.date || ''}_${hw.subject || ''}_${hw.content || ''}_${hw.teacher || ''}`;
-}
-
-function restoreDateFilterUI(filterType) {
-    document.querySelectorAll('.date-btn').forEach(btn => {
-        if (btn.dataset.dateFilter === filterType) {
-            btn.classList.add('active');
-        } else {
-            btn.classList.remove('active');
-        }
-    });
-}
-
-function getNextSchoolDay(fromDate = new Date()) {
-    let target = new Date(fromDate);
-    target.setHours(0, 0, 0, 0);
-    target.setDate(target.getDate() + 1);
-
-    if (target.getDay() === 6) {
-        target.setDate(target.getDate() + 2);
-    } else if (target.getDay() === 0) {
-        target.setDate(target.getDate() + 1);
-    }
-    return target;
-}
-
-function parseHWDate(itemOrDate) {
-    if (!itemOrDate || !DATE_UTILS) return null;
-    if (typeof itemOrDate === 'object') {
-        const normalized = DATE_UTILS.fromDateKey(itemOrDate.dateISO);
-        if (normalized) return normalized;
-        return DATE_UTILS.parseHomeworkDate(itemOrDate.date);
-    }
-    return DATE_UTILS.parseHomeworkDate(itemOrDate);
-}
-
-function applyAllFilters() {
-    let filtered = [...rawHomeworkList];
-
-    // --- 日期過濾 ---
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    if (savedState.dateFilter === 'TODAY') {
-        filtered = filtered.filter(item => {
-            const d = parseHWDate(item);
-            return d && d.getTime() === today.getTime();
-        });
-    } else if (savedState.dateFilter === 'NEXT_SCHOOL_DAY') {
-        const nextSchoolDay = getNextSchoolDay(today);
-        filtered = filtered.filter(item => {
-            const d = parseHWDate(item);
-            return d && d.getTime() === nextSchoolDay.getTime();
-        });
-    } else if (savedState.dateFilter === 'NEXT_7_DAYS') {
-        const next7Days = new Date(today);
-        next7Days.setDate(next7Days.getDate() + 7);
-        filtered = filtered.filter(item => {
-            const d = parseHWDate(item);
-            return d && d >= today && d <= next7Days;
-        });
-    }
-
-    // --- 選組過濾 ---
-    filtered = filtered.filter(item => {
-        const subject = (item.subject || '').toUpperCase();
-        const teacher = (item.teacher || '').toUpperCase();
-        const content = (item.content || '').toUpperCase();
-
-        // 數學
-        const isMath = subject.includes('MATH') || subject.includes('數');
-        if (isMath) {
-            if (savedState.mathGroup !== 'ALL') {
-                const myMathInfo = MATH_MAP[savedState.mathGroup];
-                if (!myMathInfo) return true;
-
-                const targetTeacher = myMathInfo.teacher;
-                const targetGp = myMathInfo.gp;
-
-                const isOtherTeacher = ALL_MATH_TEACHERS.some(t => t !== targetTeacher && (teacher.includes(t) || content.includes(t)));
-                const isOtherGroup = Object.values(MATH_MAP).some(m => m.gp !== targetGp && content.includes(m.gp));
-
-                if (isOtherTeacher || isOtherGroup) return false;
-                if (teacher !== '' && !teacher.includes(targetTeacher) && ALL_MATH_TEACHERS.includes(teacher)) return false;
-            }
-            return true;
-        }
-
-        // X1
-        const isX1 = content.startsWith('X1') || ALL_X1_TEACHERS.some(t => teacher.includes(t));
-        if (isX1) {
-            if (savedState.x1 !== 'ALL') {
-                const myX1 = X1_MAP[savedState.x1];
-                if (myX1) {
-                    const matchTeacher = teacher.includes(myX1.teacher) || content.includes(myX1.teacher);
-                    const matchName = myX1.names.some(n => subject.includes(n) || content.includes(n));
-                    if (!matchTeacher && !matchName) return false;
+            let data;
+            try {
+                data = await CLIENT.fetchRecords(from, { signal: controller.signal });
+            } catch (error) {
+                if (controller.signal.aborted || number !== requestNumber) return;
+                directError = error;
+                source = 'sms-tab';
+                try { data = await fetchViaTab(from); }
+                catch (fallbackError) {
+                    if (directError && directError.diagnostics) throw directError;
+                    if (fallbackError && fallbackError.diagnostics) throw fallbackError;
+                    const detail = directError && directError.message && !/failed to fetch|load failed|networkerror/i.test(directError.message)
+                        ? `${directError.message} ` : '';
+                    throw new Error(`${detail}請先登入 SMS，開啟並重新載入學生頁面，再按「重新整理」。`);
                 }
             }
-            return true;
-        }
-
-        // X2
-        const isX2 = content.startsWith('X2') || ALL_X2_TEACHERS.some(t => teacher.includes(t));
-        if (isX2) {
-            if (savedState.x2 !== 'ALL') {
-                const myX2 = X2_MAP[savedState.x2];
-                if (myX2) {
-                    const matchTeacher = teacher.includes(myX2.teacher) || content.includes(myX2.teacher);
-                    const matchName = myX2.names.some(n => subject.includes(n) || content.includes(n));
-                    if (!matchTeacher && !matchName) return false;
-                }
+            if (number !== requestNumber || controller.signal.aborted) return;
+            if (!data || !Array.isArray(data.homeworkList) || !Array.isArray(data.reminderList) ||
+                !DATE.fromDateKey(data.sourceStartDate) || data.sourceStartDate > from) {
+                throw new Error('SMS 回傳的資料或日期範圍不完整，保留上次成功資料。');
             }
-            return true;
-        }
-
-        // X3
-        const isX3 = content.startsWith('X3') || ALL_X3_TEACHERS.some(t => teacher.includes(t));
-        if (isX3) {
-            if (savedState.x3 !== 'ALL') {
-                const myX3 = X3_MAP[savedState.x3];
-                if (myX3) {
-                    const matchTeacher = teacher.includes(myX3.teacher) || content.includes(myX3.teacher);
-                    const matchName = myX3.names.some(n => subject.includes(n) || content.includes(n));
-                    if (!matchTeacher && !matchName) return false;
-                }
+            const now = new Date();
+            const syncDiagnostics = {
+                version: VERSION, status: 'synced', attemptedAt: now.toISOString(), source,
+                ...(data.diagnostics || {})
+            };
+            await commitLatest(number, {
+                recordsSchemaVersion: SCHEMA_VERSION,
+                homeworkList: data.homeworkList,
+                reminderList: data.reminderList,
+                sourceStartDate: data.sourceStartDate,
+                lastUpdated: formatTime(now), lastUpdatedISO: now.toISOString(),
+                isSynced: true, lastSyncError: '', syncDiagnostics
+            });
+        } catch (error) {
+            if (number !== requestNumber || controller.signal.aborted) return;
+            const message = String((error && error.message) || 'SMS 抓取失敗。');
+            const syncDiagnostics = {
+                version: VERSION, status: 'error', attemptedAt: new Date().toISOString(),
+                error: message, ...((error && error.diagnostics) || {})
+            };
+            try {
+                // Do not erase cached lists, source date, or the last successful time.
+                await commitLatest(number, { isSynced: false, lastSyncError: message, syncDiagnostics });
+            } catch (_storageError) {
+                lastSyncError = `無法儲存同步狀態：${message}`;
             }
-            return true;
+            // A first failed sync has no v2 cache; show its error locally too.
+            if (!cacheUsable) { isSynced = false; lastSyncError = message; diagnostics = syncDiagnostics; }
+        } finally {
+            if (number === requestNumber) { isFetching = false; requestFromDate = ''; renderStatus(); renderDeveloper(); renderRecords(); }
         }
-
-        return true;
-    });
-
-    renderHomeworkList(filtered);
-}
-
-function renderHomeworkList(list) {
-    const listContainer = document.getElementById('hw-list');
-    const countBadge = document.getElementById('hw-count');
-
-    countBadge.textContent = `${list.length} 項`;
-
-    if (list.length === 0) {
-        listContainer.innerHTML = '<div class="empty">沒有相關功課！</div>';
-        return;
     }
 
-    listContainer.innerHTML = '';
-    list.forEach(hw => {
-        const hwId = getHWUniqueId(hw);
-        const isDone = !!completedHomeworkMap[hwId];
-
-        const card = document.createElement('div');
-        card.className = `hw-card ${isDone ? 'completed' : ''}`;
-        card.dataset.hwId = hwId;
-
-        card.innerHTML = `
-            <div class="hw-header">
-                <label class="hw-check-title">
-                    <input type="checkbox" class="hw-checkbox" ${isDone ? 'checked' : ''}>
-                    <span class="subject">${escapeHtml(hw.subject)}</span>
-                </label>
-                <span class="date-badge">📅 ${escapeHtml(hw.date)}</span>
-            </div>
-            <div class="content">${escapeHtml(hw.content)}</div>
-            <div class="footer">
-                <span>⏱️ ${escapeHtml(hw.time || '未指定時間')}</span>
-                <span>老師：${escapeHtml(hw.teacher || '無')}</span>
-            </div>
-        `;
-
-        const checkbox = card.querySelector('.hw-checkbox');
-        checkbox.addEventListener('change', (e) => {
-            const checked = e.target.checked;
-            if (checked) {
-                completedHomeworkMap[hwId] = true;
-                card.classList.add('completed');
-            } else {
-                delete completedHomeworkMap[hwId];
-                card.classList.remove('completed');
+    function chooseTab(name, focus = false) {
+        state.activeTab = name; saveState(); renderRecords();
+        if (focus) $(`tab-${name}`).focus();
+    }
+    function bindEvents() {
+        $('profile-student').addEventListener('change', event => {
+            state.student = event.target.value;
+            const student = STUDENTS_DATABASE[Number(state.student)];
+            if (state.student !== 'CUSTOM' && student) {
+                Object.assign(state, { mathGroup: student.math, x1: student.x1, x2: student.x2, x3: student.x3 });
+                $('profile-accordion').removeAttribute('open');
             }
-            saveCompletedHomeworkMap();
+            saveState(); renderControls(); renderRecords();
         });
+        const profileFields = { 'profile-math': 'mathGroup', 'profile-x1': 'x1', 'profile-x2': 'x2', 'profile-x3': 'x3', 'profile-modules': 'modules' };
+        Object.entries(profileFields).forEach(([id, key]) => $(id).addEventListener('change', event => {
+            state[key] = event.target.value; state.student = 'CUSTOM';
+            saveState(); renderControls(); renderRecords();
+        }));
+        document.querySelectorAll('.date-btn').forEach(button => button.addEventListener('click', () => {
+            state.dateFilter = button.dataset.dateFilter; uiMessage = '';
+            saveState(); renderControls(); renderRecords(); renderStatus(); maybeFetchEarlier();
+        }));
+        $('apply-custom-date').addEventListener('click', () => {
+            const selected = $('custom-date').value;
+            if (!DATE.fromDateKey(selected)) { uiMessage = '請先選擇有效的指定日期。'; renderStatus(); return; }
+            state.customDate = selected; state.dateFilter = 'CUSTOM'; uiMessage = '';
+            saveState(); renderControls(); renderRecords(); renderStatus(); maybeFetchEarlier();
+        });
+        $('refresh').addEventListener('click', () => { void syncRecords(); });
+        $('dev-refresh').addEventListener('click', () => { $('dev-message').textContent = '正在重新抓取…'; void syncRecords(); });
+        $('dev-mode-toggle').addEventListener('change', event => {
+            developerMode = event.target.checked; renderDeveloper();
+            void storageSet({ developerMode }).catch(error => { $('dev-message').textContent = `儲存失敗：${error.message}`; });
+        });
+        $('dev-copy').addEventListener('click', async () => {
+            try {
+                await navigator.clipboard.writeText(JSON.stringify(diagnostics || { status: 'unknown' }, null, 2));
+                $('dev-message').textContent = '診斷資料已複製（不含功課或提醒內容）。';
+            } catch (_error) { $('dev-message').textContent = '複製失敗，請手動選取診斷資料。'; }
+        });
+        for (const name of ['homework', 'reminders']) {
+            $(`tab-${name}`).addEventListener('click', () => chooseTab(name));
+            $(`tab-${name}`).addEventListener('keydown', event => {
+                if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) {
+                    event.preventDefault();
+                    const target = event.key === 'Home' ? 'homework' : event.key === 'End' ? 'reminders' : name === 'homework' ? 'reminders' : 'homework';
+                    chooseTab(target, true);
+                }
+            });
+        }
+        document.querySelectorAll('input[name="view-mode"]').forEach(radio => radio.addEventListener('change', () => {
+            if (!radio.checked) return;
+            state.viewMode = radio.value; saveState(); renderRecords();
+        }));
+        const showSettings = open => {
+            $('settings-panel').hidden = !open;
+            $('settings-button').setAttribute('aria-expanded', String(open));
+            if (open) $('settings-close').focus(); else $('settings-button').focus();
+        };
+        $('settings-button').addEventListener('click', () => showSettings($('settings-panel').hidden));
+        $('settings-close').addEventListener('click', () => showSettings(false));
+        document.addEventListener('keydown', event => { if (event.key === 'Escape' && !$('settings-panel').hidden) showSettings(false); });
+        document.addEventListener('click', event => {
+            if (!$('settings-panel').hidden && !$('settings-panel').contains(event.target) && !$('settings-button').contains(event.target)) {
+                $('settings-panel').hidden = true; $('settings-button').setAttribute('aria-expanded', 'false');
+            }
+        });
+        $('apply-from-date').addEventListener('click', () => {
+            const date = $('fetch-from-date').value;
+            if (!DATE.fromDateKey(date)) { uiMessage = '請先選擇有效的載入起始日期。'; renderStatus(); return; }
+            state.fromDate = date; expandForCurrentFilter(); saveState(); uiMessage = '';
+            renderControls(); void syncRecords();
+        });
+        // Keep the original five-tap Easter egg.
+        let taps = 0, tapTimer = null, egg = false;
+        const tapTitle = () => {
+            taps += 1; clearTimeout(tapTimer); tapTimer = setTimeout(() => { taps = 0; }, 1800);
+            if (taps >= 5) { taps = 0; egg = !egg; $('brand-title').textContent = egg ? 'Fuck.SMS' : 'Better.SMS'; }
+        };
+        $('brand-title').addEventListener('click', tapTitle);
+        $('brand-title').addEventListener('keydown', event => {
+            if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); tapTitle(); }
+        });
+    }
 
-        listContainer.appendChild(card);
+    document.addEventListener('DOMContentLoaded', async () => {
+        STUDENTS_DATABASE.forEach((student, index) => {
+            const option = document.createElement('option'); option.value = String(index); option.textContent = student.name;
+            $('profile-student').appendChild(option);
+        });
+        bindEvents();
+        chrome.storage.onChanged.addListener((changes, area) => {
+            if (area !== 'local') return;
+            const values = {};
+            // Preferences and checkboxes are written by this popup itself.
+            // Reapplying its older queued writes could revert a newer user choice.
+            for (const key of ['homeworkList', 'reminderList', 'recordsSchemaVersion', 'sourceStartDate', 'lastUpdated', 'isSynced', 'lastSyncError', 'syncDiagnostics', 'developerMode']) {
+                if (changes[key]) values[key] = changes[key].newValue;
+            }
+            if (Object.keys(values).length) applyStored(values);
+        });
+        try {
+            const values = await storageGet(['savedState', 'homeworkList', 'reminderList', 'recordsSchemaVersion', 'completedHomeworkMap', 'sourceStartDate', 'lastUpdated', 'isSynced', 'lastSyncError', 'syncDiagnostics', 'developerMode']);
+            applyStored(values, true);
+            expandForCurrentFilter();
+            void syncRecords();
+        } catch (error) {
+            lastSyncError = `無法讀取擴充功能儲存資料：${error.message}`;
+            renderStatus(); renderRecords();
+        }
     });
-}
-
-function escapeHtml(text) {
-    if (text == null) return '';
-    return String(text)
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/\"/g, '&quot;')
-        .replace(/'/g, '&#39;');
-}
+})();

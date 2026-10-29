@@ -350,22 +350,106 @@
       padding: 20px 0;
       font-size: 13px;
     }
+
+    /* Tabs, date input and settings keep the original compact blue/grey palette. */
+    body { padding-bottom: 72px; }
+    button, input, select { font: inherit; }
+    button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-visible, a:focus-visible {
+      outline: 2px solid #0284c7; outline-offset: 2px;
+    }
+    .status-bar { gap: 8px; }
+    .sync-actions { display: flex; align-items: center; gap: 8px; margin: -3px 0 9px; font-size: 11px; }
+    .sync-actions .source-date { color: #64748b; flex: 1; }
+    .sync-actions a { color: #0369a1; text-decoration: none; }
+    .sync-actions a:hover { text-decoration: underline; }
+    .small-button {
+      border: 1px solid #cbd5e1; border-radius: 5px; background: #fff; color: #0369a1;
+      padding: 5px 8px; cursor: pointer; font-weight: 600; white-space: nowrap;
+    }
+    .small-button:hover { background: #f0f9ff; }
+    .small-button:disabled { opacity: .55; cursor: wait; }
+    .message {
+      margin: 0 0 9px; padding: 8px 10px; border-radius: 6px; border: 1px solid #fcd34d;
+      color: #854d0e; background: #fffbeb; font-size: 11px; line-height: 1.5;
+    }
+    [hidden] { display: none !important; }
+    .date-filter-group { display: grid; grid-template-columns: repeat(3, 1fr); }
+    .date-btn { min-height: 30px; }
+    .custom-date-row { display: flex; gap: 6px; align-items: center; margin: -3px 0 12px; font-size: 11px; color: #475569; }
+    .custom-date-row label { white-space: nowrap; }
+    .custom-date-row input, .settings-date input {
+      min-width: 0; flex: 1; border: 1px solid #cbd5e1; border-radius: 5px;
+      padding: 5px 7px; background: #fff; color: #334155; font-size: 12px;
+    }
+    .profile-help { margin: 9px 0 0; color: #64748b; font-size: 11px; line-height: 1.5; }
+    .profile-field select { width: 100%; }
+    .list-tabs { display: flex; gap: 5px; background: #eaf1f7; border-radius: 8px; padding: 4px; margin-bottom: 10px; }
+    .list-tab {
+      flex: 1; padding: 7px 6px; border: 0; border-radius: 6px; background: transparent;
+      color: #64748b; font-weight: 600; font-size: 12px; cursor: pointer;
+    }
+    .list-tab[aria-selected="true"] { background: white; color: #0369a1; box-shadow: 0 1px 3px rgba(15,23,42,.1); }
+    .tab-count { display: inline-block; margin-left: 4px; color: #64748b; font-size: 11px; font-weight: 500; }
+    .list-heading { color: #334155; font-size: 12px; font-weight: 700; margin: 4px 1px 8px; }
+    .list-section + .list-section { margin-top: 14px; }
+    .list-heading span { color: #64748b; font-weight: 500; }
+    .hw-header { gap: 8px; }
+    .hw-check-title { min-width: 0; }
+    .subject { overflow-wrap: anywhere; }
+    .date-badge { white-space: nowrap; }
+    .verify-note {
+      display: inline-block; margin-top: 4px; padding: 3px 6px; border-radius: 4px;
+      font-size: 10px; line-height: 1.4; color: #92400e; background: #fffbeb;
+    }
+    .settings-button {
+      position: fixed; z-index: 5; right: 15px; bottom: 14px; width: 42px; height: 42px;
+      display: grid; place-items: center; border: 1px solid #0369a1; border-radius: 50%;
+      color: white; background: #0284c7; cursor: pointer; font-size: 21px;
+      box-shadow: 0 4px 14px rgba(3,105,161,.28);
+    }
+    .settings-button:hover { background: #0369a1; }
+    .settings-panel {
+      position: fixed; z-index: 6; right: 14px; bottom: 65px; width: min(340px, calc(100vw - 28px));
+      max-height: calc(100vh - 85px); overflow: auto; padding: 13px;
+      border: 1px solid #cbd5e1; border-radius: 10px; background: #fff;
+      box-shadow: 0 10px 30px rgba(15,23,42,.18); font-size: 12px;
+    }
+    .settings-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+    .settings-header h3 { margin: 0; color: #0f172a; font-size: 14px; }
+    .settings-close { border: 0; background: transparent; color: #64748b; cursor: pointer; font-size: 20px; line-height: 1; }
+    .settings-panel fieldset { padding: 0; margin: 0; border: 0; }
+    .settings-panel legend, .settings-label { font-weight: 700; color: #475569; margin: 0 0 7px; }
+    .layout-choice {
+      display: flex; gap: 8px; align-items: flex-start; padding: 8px; margin: 4px 0;
+      background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; cursor: pointer;
+    }
+    .layout-choice input { accent-color: #0284c7; margin: 2px 0 0; }
+    .layout-choice strong { display: block; color: #334155; }
+    .layout-choice small { display: block; color: #64748b; margin-top: 2px; }
+    .settings-divider { border: 0; border-top: 1px solid #e2e8f0; margin: 12px 0; }
+    .settings-date { display: flex; gap: 6px; }
+    .settings-help { margin: 6px 0 0; color: #64748b; font-size: 11px; line-height: 1.5; }
   </style>
 </head>
 <body>
   <div class="header">
     <div class="header-title-group">
       <h2 id="brand-title" tabindex="0">Better.SMS</h2>
-      <div class="author">V1.3.0</div>
+      <div class="author">V1.6.0</div>
     </div>
-    <span id="hw-count" class="badge">0 項</span>
+    <span id="total-count" class="badge">0 項</span>
   </div>
 
-  <!-- 新增：同步與最後更新時間狀態列 -->
   <div class="status-bar">
     <span id="sync-status" class="sync-badge pending" role="status" aria-live="polite">🟠 等待 SMS 頁面</span>
     <span id="last-updated" class="update-time">最後更新：尚未同步</span>
   </div>
+  <div class="sync-actions">
+    <span id="source-date" class="source-date">尚未載入資料</span>
+    <a id="open-sms" href="https://sms.twghlkss.edu.hk/student/records.php?feature=homework" target="_blank" rel="noopener noreferrer">開啟 SMS ↗</a>
+    <button id="refresh" class="small-button" type="button">↻ 重新整理</button>
+  </div>
+  <div id="sync-message" class="message" role="status" hidden></div>
 
   <details class="dev-tools" id="developer-tools">
     <summary class="dev-summary">
@@ -373,11 +457,8 @@
       <span id="dev-mode-state" class="dev-mode-state">關閉</span>
     </summary>
     <div class="dev-content">
-      <label class="dev-toggle-row" for="dev-mode-toggle">
-        <input id="dev-mode-toggle" type="checkbox">
-        啟用開發者模式
-      </label>
-      <p class="dev-help">顯示抓取診斷、記錄除錯資訊，並可手動重新抓取。除錯資料不包含功課內容。</p>
+      <label class="dev-toggle-row" for="dev-mode-toggle"><input id="dev-mode-toggle" type="checkbox">啟用開發者模式</label>
+      <p class="dev-help">顯示抓取診斷，並可手動重新抓取。診斷不包含功課或提醒內容。</p>
       <div id="dev-panel" hidden>
         <pre id="dev-diagnostics" class="dev-diagnostics">等待同步診斷資料…</pre>
         <div class="dev-actions">
@@ -389,90 +470,115 @@
     </div>
   </details>
 
-  <!-- 1. 日期快捷篩選區 -->
   <div class="section-title">日期篩選</div>
-  <div class="date-filter-group">
-    <button class="date-btn active" data-date-filter="ALL">全部日期</button>
-    <button class="date-btn" data-date-filter="TODAY">今天功課</button>
-    <button class="date-btn" data-date-filter="NEXT_SCHOOL_DAY">下個上學天</button>
-    <button class="date-btn" data-date-filter="NEXT_7_DAYS">未來 7 天</button>
+  <div class="date-filter-group" aria-label="日期篩選">
+    <button type="button" class="date-btn active" data-date-filter="ALL">全部已載入</button>
+    <button type="button" class="date-btn" data-date-filter="TODAY">今天</button>
+    <button type="button" class="date-btn" data-date-filter="NEXT_SCHOOL_DAY" title="只跳過週末，未計算公眾假期或學校假期">下個上學天</button>
+    <button type="button" class="date-btn" data-date-filter="NEXT_7_DAYS" title="包括今天在內的 7 天">未來 7 天</button>
+    <button type="button" class="date-btn" data-date-filter="NEXT_WEEK" title="下一個星期一至星期日">下星期</button>
+  </div>
+  <div class="custom-date-row">
+    <label for="custom-date">指定日期：</label>
+    <input id="custom-date" type="date">
+    <button id="apply-custom-date" class="small-button" type="button">查看該日</button>
   </div>
 
-  <!-- 2. 可收起/展開的個人選科與學生選擇區 -->
   <details class="profile-box" id="profile-accordion">
     <summary class="profile-summary">
       <div>👤 學生設定：<span id="current-student-tag" class="student-tag">自訂模式</span></div>
       <span class="chevron-icon">▼</span>
     </summary>
-
     <div class="profile-content">
-      <!-- 學生名單選擇 -->
       <div class="student-select-field">
         <label for="profile-student">選擇學生姓名：</label>
-        <select id="profile-student">
-          <option value="CUSTOM">-- 自訂 / 手動選擇 --</option>
-        </select>
+        <select id="profile-student"><option value="CUSTOM">-- 自訂 / 手動選擇 --</option></select>
       </div>
-
       <div class="profile-grid">
         <div class="profile-field">
-          <label>Math 數學組別：</label>
+          <label for="profile-math">Math 數學組別：</label>
           <select id="profile-math">
-            <option value="ALL">全部組別</option>
-            <option value="Gp1">Gp1 (CPC)</option>
-            <option value="Gp2">Gp2 (SYT)</option>
-            <option value="Gp3">Gp3 (AWY)</option>
-            <option value="Gp4">Gp4 (NOK)</option>
-            <option value="Gp5">Gp5 (TKP)</option>
-            <option value="Gp6">Gp6 (HWS)</option>
+            <option value="ALL">全部組別（未設定）</option>
+            <option value="Gp1">Gp1 (CPC)</option><option value="Gp2">Gp2 (SYT)</option>
+            <option value="Gp3">Gp3 (AWY)</option><option value="Gp4">Gp4 (NOK)</option>
+            <option value="Gp5">Gp5 (TKP)</option><option value="Gp6">Gp6 (HWS)</option>
           </select>
         </div>
         <div class="profile-field">
-          <label>X1 科目：</label>
+          <label for="profile-x1">X1 科目：</label>
           <select id="profile-x1">
-            <option value="ALL">全部 (X1)</option>
-            <option value="PHY">PHY 物理 (LWY)</option>
-            <option value="CHEM">CHEM 化學 (LCO)</option>
-            <option value="HIST">HIST 歷史 (TKY)</option>
-            <option value="CHIS">CHIS 中史 (HKC)</option>
-            <option value="JAP">JAP 日語 (ATH)</option>
-            <option value="ECON">ECON 經濟 (TYN)</option>
+            <option value="ALL">全部 X1（未設定）</option>
+            <option value="PHY">PHY 物理 (LWY)</option><option value="CHEM">CHEM 化學 (LCO)</option>
+            <option value="HIST">HIST 歷史 (TKY)</option><option value="CHIS">CHIS 中史 (HKC)</option>
+            <option value="JAP">JAP 日語 (ATH)</option><option value="ECON">ECON 經濟 (TYN)</option>
           </select>
         </div>
         <div class="profile-field">
-          <label>X2 科目：</label>
+          <label for="profile-x2">X2 科目：</label>
           <select id="profile-x2">
-            <option value="ALL">全部 (X2)</option>
-            <option value="BAFS">BAFS 企會財 (TPY)</option>
-            <option value="BIO">BIO 生物 (YSL)</option>
-            <option value="CHEM">CHEM 化學 (PTW)</option>
-            <option value="CHIS">CHIS 中史 (WCL)</option>
-            <option value="TH">TH 旅航 (CLY)</option>
-            <option value="VA">VA 視覺藝術 (LNF)</option>
+            <option value="ALL">全部 X2（未設定）</option>
+            <option value="BAFS">BAFS 企會財 (TPY)</option><option value="BIO">BIO 生物 (YSL)</option>
+            <option value="CHEM">CHEM 化學 (PTW)</option><option value="CHIS">CHIS 中史 (WCL)</option>
+            <option value="TH">TH 旅航 (CLY)</option><option value="VA">VA 視覺藝術 (LNF)</option>
           </select>
         </div>
         <div class="profile-field">
-          <label>X3 科目：</label>
+          <label for="profile-x3">X3 科目：</label>
           <select id="profile-x3">
-            <option value="ALL">全部 (X3)</option>
-            <option value="BIO">BIO 生物 (NWK)</option>
-            <option value="ECON">ECON 經濟 (LYK)</option>
-            <option value="GEOG">GEOG 地理 (LHH)</option>
-            <option value="HIST">HIST 歷史 (ATH)</option>
-            <option value="ICT">ICT 資訊科技 (YMT)</option>
-            <option value="PHY">PHY 物理 (FHM)</option>
+            <option value="ALL">全部 X3（未設定）</option>
+            <option value="BIO">BIO 生物 (NWK)</option><option value="ECON">ECON 經濟 (LYK)</option>
+            <option value="GEOG">GEOG 地理 (LHH)</option><option value="HIST">HIST 歷史 (ATH)</option>
+            <option value="ICT">ICT 資訊科技 (YMT)</option><option value="PHY">PHY 物理 (FHM)</option>
+          </select>
+        </div>
+        <div class="profile-field">
+          <label for="profile-modules">M1 / M2：</label>
+          <select id="profile-modules">
+            <option value="ALL">未設定（全部顯示）</option>
+            <option value="NONE">不修讀 M1 / M2</option>
+            <option value="M1">修讀 M1 (CPC)</option>
+            <option value="M2">修讀 M2 (SYT)</option>
+            <option value="BOTH">修讀 M1 及 M2</option>
           </select>
         </div>
       </div>
+      <p class="profile-help">功課和提醒使用同一套選科。中文、英文和 STEAM 一律顯示；未設定的組別不會過濾；其他無法辨識的項目會保留並提示核對。</p>
     </div>
   </details>
 
-  <!-- 3. 功課列表展示 -->
-  <div id="hw-list">
-    <div class="empty">載入中...</div>
+  <div id="list-tabs" class="list-tabs" role="tablist" aria-label="功課和提醒">
+    <button type="button" id="tab-homework" class="list-tab" role="tab" aria-controls="homework-section" aria-selected="true">功課 <span id="tab-homework-count" class="tab-count">0</span></button>
+    <button type="button" id="tab-reminders" class="list-tab" role="tab" aria-controls="reminders-section" aria-selected="false" tabindex="-1">提醒 <span id="tab-reminders-count" class="tab-count">0</span></button>
+  </div>
+  <section id="homework-section" class="list-section" role="tabpanel" aria-labelledby="tab-homework">
+    <div class="list-heading" id="homework-heading" hidden>功課 <span id="homework-section-count"></span></div>
+    <div id="hw-list"><div class="empty">載入中…</div></div>
+  </section>
+  <section id="reminders-section" class="list-section" role="tabpanel" aria-labelledby="tab-reminders" hidden>
+    <div class="list-heading" id="reminders-heading" hidden>提醒 <span id="reminders-section-count"></span></div>
+    <div id="reminder-list"><div class="empty">載入中…</div></div>
+  </section>
+
+  <button id="settings-button" class="settings-button" type="button" aria-label="顯示與載入設定" aria-controls="settings-panel" aria-haspopup="dialog" aria-expanded="false" title="顯示與載入設定">⚙</button>
+  <div id="settings-panel" class="settings-panel" role="dialog" aria-label="顯示與載入設定" hidden>
+    <div class="settings-header"><h3>顯示與載入設定</h3><button id="settings-close" class="settings-close" type="button" aria-label="關閉設定">×</button></div>
+    <fieldset>
+      <legend>功課與提醒的顯示方式</legend>
+      <label class="layout-choice"><input type="radio" name="view-mode" value="tabs"><span><strong>頁籤模式</strong><small>切換查看功課或提醒</small></span></label>
+      <label class="layout-choice"><input type="radio" name="view-mode" value="stacked"><span><strong>上下分區</strong><small>同時顯示兩個清單</small></span></label>
+    </fieldset>
+    <hr class="settings-divider">
+    <div class="settings-label"><label for="fetch-from-date">SMS 載入起始日期</label></div>
+    <div class="settings-date"><input id="fetch-from-date" type="date"><button id="apply-from-date" class="small-button" type="button">載入</button></div>
+    <p class="settings-help">SMS 只返回這天及之後的資料。若篩選更早日期，會自動往前載入。下個上學天只跳過週末，未計算假期。</p>
+    <p class="settings-help">資料及設定儲存在此瀏覽器；請勿與他人共用已登入的帳戶。</p>
   </div>
 
   <script src="date-utils.js"></script>
+  <script src="homework-parser.js"></script>
+  <script src="sms-document.js"></script>
+  <script src="sms-client.js"></script>
+  <script src="subject-filter.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

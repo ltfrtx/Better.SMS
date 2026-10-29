@@ -153,7 +153,53 @@
         return makeDate(Number(match[1]), Number(match[2]), Number(match[3]));
     }
 
-    const api = { parseHomeworkDate, toDateKey, fromDateKey };
+    function startOfDay(date) {
+        if (!(date instanceof Date) || Number.isNaN(date.getTime())) return null;
+        return makeDate(date.getFullYear(), date.getMonth() + 1, date.getDate());
+    }
+
+    // This is a weekday estimate, not the school's official holiday calendar.
+    function getNextSchoolDay(fromDate = new Date()) {
+        const result = startOfDay(fromDate);
+        if (!result) return null;
+        result.setDate(result.getDate() + 1);
+        if (result.getDay() === 6) result.setDate(result.getDate() + 2);
+        if (result.getDay() === 0) result.setDate(result.getDate() + 1);
+        return result;
+    }
+
+    // Endpoints are inclusive, using local calendar dates. NEXT_WEEK means the
+    // next Monday through Sunday, even when today is a Monday or Sunday.
+    function getFilterRange(filter, referenceDate = new Date(), customDate = '') {
+        const today = startOfDay(referenceDate);
+        if (!today) return null;
+        if (filter === 'ALL') return { start: null, end: null };
+        let start = new Date(today), end;
+        if (filter === 'NEXT_SCHOOL_DAY') {
+            start = getNextSchoolDay(today);
+        } else if (filter === 'NEXT_WEEK') {
+            const day = today.getDay();
+            start.setDate(start.getDate() + (day === 0 ? 1 : 8 - day));
+        } else if (filter === 'CUSTOM') {
+            start = fromDateKey(customDate);
+            if (!start) return null;
+        } else if (!['TODAY', 'NEXT_7_DAYS'].includes(filter)) {
+            return null;
+        }
+        end = new Date(start);
+        if (filter === 'NEXT_7_DAYS' || filter === 'NEXT_WEEK') end.setDate(end.getDate() + 6);
+        return { start, end };
+    }
+
+    function matchesDateFilter(record, filter, referenceDate = new Date(), customDate = '') {
+        const range = getFilterRange(filter, referenceDate, customDate);
+        if (!range) return false;
+        if (!range.start) return true;
+        const date = record && (fromDateKey(record.dateISO) || parseHomeworkDate(record.date, referenceDate));
+        return Boolean(date && date >= range.start && date <= range.end);
+    }
+
+    const api = { parseHomeworkDate, toDateKey, fromDateKey, getNextSchoolDay, getFilterRange, matchesDateFilter };
     root.BetterSMSDateUtils = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(globalThis);

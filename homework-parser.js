@@ -77,13 +77,17 @@
 
     function chooseDateIndex(values, headerMap, referenceDate) {
         const mappedDate = headerMap && headerMap.indexes.date;
-        if (mappedDate != null && parsedDateAt(values, mappedDate, referenceDate)) return mappedDate;
+        // A named date column is authoritative: a date mentioned inside the
+        // homework description must never silently replace a malformed due date.
+        if (mappedDate != null) return parsedDateAt(values, mappedDate, referenceDate) ? mappedDate : -1;
         return values.findIndex((value, index) => Boolean(parsedDateAt(values, index, referenceDate)));
     }
 
     function chooseSubjectIndex(values, dateIndex, headerMap) {
         const explicit = headerMap && headerMap.indexes.subject;
-        if (explicit != null && explicit !== dateIndex && oneLine(values[explicit])) return explicit;
+        if (explicit != null) {
+            return explicit !== dateIndex && oneLine(values[explicit]) ? explicit : -1;
+        }
 
         // Retain the original eClass layout (date, subject, content, ...).
         if (dateIndex === 0 && values.length > 1 && oneLine(values[1])) return 1;
@@ -115,6 +119,12 @@
             return oneLine(values[fallbackIndex]);
         }
         return '';
+    }
+
+    function isEmptyPlaceholder(values) {
+        const text = oneLine(values.join(' ')).normalize('NFKC').toLowerCase();
+        if (!text) return true;
+        return /^(?:[-–—]+|(?:目前|暫時|暂时)?(?:暫無|暂无|沒有|没有|無|无)(?:相關|相关|任何|可顯示的|可显示的)?(?:功課|功课|作業|作业|提醒|記錄|记录|資料|资料|項目|项目)(?:。|\.|!)?|no\s+(?:homework|assignments?|reminders?|records?|data)(?:\s+(?:found|available))?[.!]?)$/.test(text);
     }
 
     function parseHomeworkTables(tables, referenceDate) {
@@ -152,6 +162,7 @@
 
                 const values = row.cells.map(cell => cell.text);
                 if (!values.length || !values.some(value => Boolean(oneLine(value)))) return;
+                if (isEmptyPlaceholder(values)) return;
                 if (headerMap) tableDataRows += 1;
 
                 const dateIndex = chooseDateIndex(values, headerMap, referenceDate);
@@ -245,7 +256,17 @@
         };
     }
 
-    const api = { parseHomeworkTables, cleanText, headerRole };
+    /** Parse each labeled section independently, so identical entries in
+     * homework and reminders are not deduplicated against one another. */
+    function parseRecordTables(tables, referenceDate) {
+        const ofKind = kind => (tables || []).filter(table => table && table.kind === kind);
+        return {
+            homework: parseHomeworkTables(ofKind('homework'), referenceDate),
+            reminders: parseHomeworkTables(ofKind('reminders'), referenceDate)
+        };
+    }
+
+    const api = { parseHomeworkTables, parseRecordTables, cleanText, headerRole, isEmptyPlaceholder };
     root.BetterSMSHomeworkParser = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(globalThis);
