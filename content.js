@@ -1,196 +1,305 @@
-/**
- * @Extension Fuck.SMS
- * @description Better SMS
- * @version 1.4 beta
- * @author LTF
- *
- * FIXED:
- *  - Runs in every frame (see manifest "all_frames": true) so the homework
- *    table inside an <iframe> is actually scraped.
- *  - Never overwrites good data with an empty list scraped from a page that
- *    is not the homework page (menu / login / half-loaded page).
- *  - Detects the table columns from the header row instead of assuming a
- *    fixed column order; accepts d/m/yyyy, yyyy-mm-dd and "05/03/2026 (四)".
- *  - Exposes window.__fuckSms.scrape() so the popup can force a sync via
- *    chrome.scripting.executeScript and get the result back.
- *  - Guards against double-injection.
- */
+/* global chrome, BetterSMSDateUtils, BetterSMSHomeworkParser */
+(function runBetterSMSContentScript() {
+    'use strict';
 
-(function () {
-  if (window.__fuckSms) return; // already injected in this frame
+    const VERSION = '1.3.0';
+    const QUIET_PERIOD_MS = 500;
+    const VERIFY_PERIOD_MS = 350;
+    const EMPTY_VERIFY_PERIOD_MS = 1600;
+    const EMPTY_CONFIRM_PERIOD_MS = 2500;
 
-  const DATE_DMY = /(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})/;
-  const DATE_YMD = /(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})/;
+    let quietTimer = null;
+    let verifyTimer = null;
+    let emptyConfirmTimer = null;
+    let scanGeneration = 0;
+    let lastProcessedFingerprint = '';
+    let lastFailureKey = '';
+    let storageQueue = Promise.resolve();
 
-  const HEADER_KEYS = {
-    date: ["日期", "繳交日期", "date", "due"],
-    subject: ["科目", "subject"],
-    content: ["功課", "內容", "homework", "content", "description", "題目", "標題"],
-    teacher: ["老師", "教師", "teacher"],
-    time: ["時間", "time", "節"],
-  };
-
-  function normDate(text) {
-    if (!text) return null;
-    let m = text.match(DATE_YMD);
-    if (m) return `${parseInt(m[3], 10)}/${parseInt(m[2], 10)}/${m[1]}`;
-    m = text.match(DATE_DMY);
-    if (m) return `${parseInt(m[1], 10)}/${parseInt(m[2], 10)}/${m[3]}`;
-    return null;
-  }
-
-  function cellText(cell) {
-    return (cell.innerText || cell.textContent || "").replace(/\s+/g, " ").trim();
-  }
-
-  // Try to figure out which column is which from a header row.
-  function detectColumns(table) {
-    const rows = table.querySelectorAll("tr");
-    for (const row of rows) {
-      const cells = Array.from(row.querySelectorAll("th, td"));
-      if (cells.length < 3) continue;
-      const texts = cells.map((c) => cellText(c).toLowerCase());
-      const map = {};
-      for (const key of Object.keys(HEADER_KEYS)) {
-        const idx = texts.findIndex((t) => HEADER_KEYS[key].some((k) => t.includes(k.toLowerCase())));
-        if (idx >= 0) map[key] = idx;
-      }
-      if (map.subject !== undefined && (map.content !== undefined || map.date !== undefined)) {
-        return { map, headerRow: row };
-      }
-    }
-    return null;
-  }
-
-  function scrapeTable(table, list) {
-    const detected = detectColumns(table);
-    const map = detected
-      ? detected.map
-      : { date: 0, subject: 1, content: 2, teacher: 3, time: 4 };
-    const headerRow = detected ? detected.headerRow : null;
-
-    table.querySelectorAll("tr").forEach((row) => {
-      if (row === headerRow) return;
-      if (row.querySelector("table")) return; // nested layout table, skip
-      const cols = Array.from(row.querySelectorAll(":scope > td, :scope > th"));
-      if (cols.length < 3) return;
-
-      const get = (key) => (map[key] !== undefined && cols[map[key]] ? cellText(cols[map[key]]) : "");
-
-      const rawDate = get("date") || cellText(cols[0]);
-      const date = normDate(rawDate) || normDate(cellText(row));
-      const subject = get("subject");
-      const content = get("content");
-      if (!date || !subject || subject === "科目" || subject.toLowerCase() === "subject") return;
-      if (!content && !get("teacher")) return;
-
-      const item = {
-        date,
-        subject,
-        content: content || "(無內容)",
-        teacher: get("teacher") || "無",
-        time: get("time") || "全日",
-      };
-      const dup = list.some(
-        (r) => r.date === item.date && r.subject === item.subject && r.content === item.content
-      );
-      if (!dup) list.push(item);
-    });
-  }
-
-  function scrape() {
-    const bodyText = document.body ? document.body.innerText || "" : "";
-
-    const detentionInfo = { needDetention: false, text: "毋須留堂", countText: "0" };
-    if (bodyText.includes("需要留堂") || (bodyText.includes("留堂") && !bodyText.includes("毋須留堂"))) {
-      detentionInfo.needDetention = true;
-      detentionInfo.text = "你有即將進行的留堂班，請留意！";
+    function cleanPageText(value) {
+        return String(value || '')
+            .replace(/[\u00a0\u202f]/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
     }
 
-    const homeworkList = [];
-    const tables = Array.from(document.querySelectorAll("table"));
-    let looksLikeHomeworkPage = false;
-    tables.forEach((table) => {
-      if (detectColumns(table)) looksLikeHomeworkPage = true;
-      scrapeTable(table, homeworkList);
-    });
-    if (/功課|homework/i.test(document.title || "")) looksLikeHomeworkPage = true;
+    function isVisible(element) {
+        let current = element;
+        while (current && current.nodeType === 1) {
+            if (current.hidden || current.getAttribute('aria-hidden') === 'true') return false;
+            const style = window.getComputedStyle(current);
+            if (style.display === 'none' || style.visibility === 'hidden' || style.visibility === 'collapse') {
+                return false;
+            }
+            current = current.parentElement;
+        }
+        return true;
+    }
 
-    return {
-      homeworkList,
-      detentionInfo,
-      looksLikeHomeworkPage,
-      url: location.href,
-      isTop: window.top === window,
-    };
-  }
+    function readTables() {
+        const tableElements = Array.from(document.querySelectorAll('table')).filter(isVisible);
+        const tableModels = tableElements.map(table => ({
+            rows: Array.from(table.rows).map(row => ({
+                cells: Array.from(row.cells).map(cell => ({
+                    text: cell.innerText != null ? cell.innerText : cell.textContent,
+                    isHeader: cell.tagName.toLowerCase() === 'th'
+                }))
+            }))
+        }));
+        return { tableElements, tableModels };
+    }
 
-  function nowLabel() {
-    const n = new Date();
-    return `${n.getMonth() + 1}/${n.getDate()} ${String(n.getHours()).padStart(2, "0")}:${String(
-      n.getMinutes()
-    ).padStart(2, "0")}`;
-  }
+    function hasExplicitNoHomeworkMessage(text) {
+        const normalized = cleanPageText(text).toLowerCase();
+        return /沒有(?:相關|任何)?功課|沒有(?:相關|任何)?功课|暫無(?:相關)?功課|暂无(?:相关)?功课|沒有(?:相關|任何)?作業|没有(?:相关|任何)?作业|暫無(?:相關)?作業|暂无(?:相关)?作业|目前沒有功課|目前没有功课|no\s+(?:homework|assignments?)\b/.test(normalized);
+    }
 
-  function persist(result) {
-    if (!chrome?.storage?.local) return;
-    chrome.storage.local.set(
-      {
-        homeworkList: result.homeworkList,
-        detentionInfo: result.detentionInfo,
-        lastUpdated: nowLabel(),
-        syncedAt: Date.now(),
-        syncSource: result.url,
-        syncError: "",
-        isSynced: true,
-      },
-      () => console.log("[Fuck.SMS] Synced", result.homeworkList.length, "items from", result.url)
-    );
-  }
+    function readDetentionInfo(text) {
+        const normalized = cleanPageText(text).toLowerCase();
+        const saysNoDetention = /毋須留堂|無須留堂|无须留堂|不需要留堂|无需留堂|沒有留堂|没有留堂|\bno\s+detention\b|\bno\s+detention\s+class\b/.test(normalized);
+        const needsDetention = !saysNoDetention && (
+            /需要留堂|即將進行的留堂|即将进行的留堂|留堂班/.test(normalized) ||
+            /\b(?:upcoming\s+)?detention\s+(?:class|session|required|scheduled)\b|\byou\s+(?:have|need)\s+detention\b/.test(normalized)
+        );
+        return {
+            needDetention: needsDetention,
+            text: needsDetention ? '你有即將進行的留堂班，請留意！' : '毋須留堂',
+            countText: needsDetention ? '1' : '0'
+        };
+    }
 
-  let lastSignature = null;
-  function autoScrape() {
-    const result = scrape();
-    // Only persist if we actually found homework, or we're sure this is the
-    // homework page (so an empty list is genuinely "no homework").
-    if (result.homeworkList.length === 0 && !result.looksLikeHomeworkPage) return;
-    const sig = JSON.stringify(result.homeworkList);
-    if (sig === lastSignature) return; // nothing changed, don't spam storage
-    lastSignature = sig;
-    persist(result);
-  }
+    function captureSnapshot() {
+        const body = document.body;
+        const bodyText = body ? (body.innerText || body.textContent || '') : '';
+        const { tableElements, tableModels } = readTables();
+        const parsed = BetterSMSHomeworkParser.parseHomeworkTables(tableModels, new Date());
+        const language = (document.documentElement && document.documentElement.lang) ||
+            (navigator.language || '');
+        const noHomeworkMessage = hasExplicitNoHomeworkMessage(bodyText);
+        const detentionInfo = readDetentionInfo(bodyText);
+        const fingerprint = JSON.stringify({
+            language,
+            noHomeworkMessage,
+            detentionInfo,
+            tables: tableModels.map(table => table.rows.map(row => row.cells.map(cell => cleanPageText(cell.text))))
+        });
 
-  window.__fuckSms = { scrape, persist, autoScrape, version: "1.68.0" };
+        return {
+            language,
+            tableCount: tableElements.length,
+            parsed,
+            noHomeworkMessage,
+            detentionInfo,
+            fingerprint
+        };
+    }
 
-  if (document.readyState === "complete") autoScrape();
-  else window.addEventListener("load", autoScrape);
-  autoScrape();
+    function makeDiagnostics(snapshot, status, error) {
+        return {
+            version: VERSION,
+            status,
+            error: error || '',
+            attemptedAt: new Date().toISOString(),
+            pageLanguage: String(snapshot.language || 'unknown').slice(0, 40),
+            tableCount: snapshot.tableCount,
+            recognizedTableCount: snapshot.parsed.recognizedTableCount,
+            rowsSeen: snapshot.parsed.rowsSeen,
+            matchedRows: snapshot.parsed.matchedRows,
+            unmatchedRows: snapshot.parsed.unmatchedRows,
+            parsedCount: snapshot.parsed.homeworkList.length,
+            emptyMessageDetected: snapshot.noHomeworkMessage,
+            tables: snapshot.parsed.tableDiagnostics.slice(0, 10)
+        };
+    }
 
-  let debounceTimer = null;
-  const observer = new MutationObserver(() => {
-    clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(autoScrape, 600);
-  });
-  const startObserver = () => document.body && observer.observe(document.body, { childList: true, subtree: true });
-  if (document.body) startObserver();
-  else document.addEventListener("DOMContentLoaded", startObserver);
+    function setLocalStorage(values) {
+        const write = storageQueue.then(() => new Promise((resolve, reject) => {
+            chrome.storage.local.set(values, () => {
+                const error = chrome.runtime.lastError;
+                if (error) reject(new Error(error.message));
+                else resolve();
+            });
+        }));
+        storageQueue = write.catch(() => {});
+        return write;
+    }
 
-  // Allow the popup to ask for a scrape via messaging as well.
-  if (chrome?.runtime?.onMessage) {
-    chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
-      if (msg && msg.type === "FUCK_SMS_SCRAPE") {
-        sendResponse(scrape());
-      }
-    });
-  }
+    function debugLog(label, details) {
+        chrome.storage.local.get({ developerMode: false }, result => {
+            if (!chrome.runtime.lastError && result.developerMode) {
+                console.info(`[Better.SMS] ${label}`, details);
+            }
+        });
+    }
+
+    async function recordFailure(snapshot, error) {
+        const errorKey = `${error}|${snapshot.fingerprint}`;
+        if (errorKey === lastFailureKey) return;
+        lastFailureKey = errorKey;
+        const diagnostics = makeDiagnostics(snapshot, 'error', error);
+        try {
+            // Keep the last successful homework list and timestamp intact. A
+            // language-switch loading state must never replace good data with [].
+            await setLocalStorage({
+                isSynced: false,
+                lastSyncError: error,
+                syncDiagnostics: diagnostics
+            });
+            debugLog('scrape failed', diagnostics);
+        } catch (storageError) {
+            console.error('[Better.SMS] Could not store scrape diagnostics:', storageError);
+        }
+    }
+
+    function formatUpdatedTime(date) {
+        return `${date.getMonth() + 1}/${date.getDate()} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+    }
+
+    async function commitSnapshot(snapshot) {
+        const hasAssignments = snapshot.parsed.homeworkList.length > 0;
+        const hasRecognizedTable = snapshot.parsed.recognizedTableCount > 0;
+
+        if (snapshot.parsed.unmatchedRows > 0 && !snapshot.noHomeworkMessage) {
+            await recordFailure(snapshot, `功課表格有 ${snapshot.parsed.unmatchedRows} 列未能辨識；為避免漏資料，保留上次成功結果。`);
+            return;
+        }
+
+        if (!hasAssignments && !hasRecognizedTable && !snapshot.noHomeworkMessage) {
+            await recordFailure(snapshot, '找不到可辨識的功課表格；請確認已登入 SMS 學生頁面。');
+            return;
+        }
+
+        // An unlabelled/temporarily empty page is not a successful empty sync.
+        // Empty recognized tables reach here only after a longer quiet period.
+        const now = new Date();
+        const diagnostics = makeDiagnostics(snapshot, 'synced', '');
+        const updated = {
+            detentionInfo: snapshot.detentionInfo,
+            homeworkList: snapshot.parsed.homeworkList,
+            lastUpdated: formatUpdatedTime(now),
+            lastUpdatedISO: now.toISOString(),
+            lastSyncError: '',
+            syncDiagnostics: diagnostics,
+            isSynced: true
+        };
+
+        try {
+            await setLocalStorage(updated);
+            lastFailureKey = '';
+            debugLog('sync complete', diagnostics);
+        } catch (error) {
+            await recordFailure(snapshot, `寫入擴充功能儲存空間失敗：${error.message}`);
+        }
+    }
+
+    async function markEmptyAsPending(snapshot) {
+        const diagnostics = makeDiagnostics(snapshot, 'verifying-empty', '正在再次確認空白功課表。');
+        try {
+            await setLocalStorage({
+                isSynced: false,
+                lastSyncError: '',
+                syncDiagnostics: diagnostics
+            });
+        } catch (error) {
+            console.error('[Better.SMS] Could not store empty-table status:', error);
+        }
+    }
+
+    function scheduleEmptyRecheck(fingerprint, delay) {
+        clearTimeout(emptyConfirmTimer);
+        emptyConfirmTimer = setTimeout(() => {
+            if (pendingEmptyFingerprint !== fingerprint) return;
+            lastProcessedFingerprint = '';
+            scheduleScrape(0);
+        }, delay);
+    }
+
+    let pendingEmptyFingerprint = '';
+    let pendingEmptySince = 0;
+
+    function processSnapshot(snapshot) {
+        if (snapshot.fingerprint === lastProcessedFingerprint) return;
+        lastProcessedFingerprint = snapshot.fingerprint;
+
+        const isAmbiguousEmpty = snapshot.parsed.homeworkList.length === 0 &&
+            snapshot.parsed.recognizedTableCount > 0 &&
+            snapshot.parsed.unmatchedRows === 0 &&
+            !snapshot.noHomeworkMessage;
+
+        if (isAmbiguousEmpty) {
+            const now = Date.now();
+            if (pendingEmptyFingerprint !== snapshot.fingerprint) {
+                pendingEmptyFingerprint = snapshot.fingerprint;
+                pendingEmptySince = now;
+                void markEmptyAsPending(snapshot);
+                scheduleEmptyRecheck(snapshot.fingerprint, EMPTY_CONFIRM_PERIOD_MS);
+                return;
+            }
+            const elapsed = now - pendingEmptySince;
+            if (elapsed < EMPTY_CONFIRM_PERIOD_MS) {
+                scheduleEmptyRecheck(snapshot.fingerprint, EMPTY_CONFIRM_PERIOD_MS - elapsed);
+                return;
+            }
+        } else {
+            pendingEmptyFingerprint = '';
+            pendingEmptySince = 0;
+            clearTimeout(emptyConfirmTimer);
+        }
+
+        pendingEmptyFingerprint = '';
+        pendingEmptySince = 0;
+        clearTimeout(emptyConfirmTimer);
+        void commitSnapshot(snapshot);
+    }
+
+    function scheduleScrape(delay = QUIET_PERIOD_MS) {
+        scanGeneration += 1;
+        const generation = scanGeneration;
+        clearTimeout(quietTimer);
+        clearTimeout(verifyTimer);
+
+        quietTimer = setTimeout(() => {
+            const firstSnapshot = captureSnapshot();
+            const isPossiblyEmpty = firstSnapshot.parsed.homeworkList.length === 0 &&
+                !firstSnapshot.noHomeworkMessage;
+            const verifyDelay = isPossiblyEmpty ? EMPTY_VERIFY_PERIOD_MS : VERIFY_PERIOD_MS;
+
+            verifyTimer = setTimeout(() => {
+                if (generation !== scanGeneration) return;
+                const verifiedSnapshot = captureSnapshot();
+                if (firstSnapshot.fingerprint !== verifiedSnapshot.fingerprint) {
+                    scheduleScrape(250);
+                    return;
+                }
+                processSnapshot(verifiedSnapshot);
+            }, verifyDelay);
+        }, delay);
+    }
+
+    function onRuntimeMessage(message, _sender, sendResponse) {
+        if (!message || message.type !== 'BETTER_SMS_SCRAPE_NOW') return false;
+        lastProcessedFingerprint = '';
+        scheduleScrape(0);
+        sendResponse({ ok: true, queued: true });
+        return false;
+    }
+
+    if (chrome.runtime && chrome.runtime.onMessage) {
+        chrome.runtime.onMessage.addListener(onRuntimeMessage);
+    }
+
+    if (document.body) {
+        const observer = new MutationObserver(() => scheduleScrape());
+        observer.observe(document.body, {
+            childList: true,
+            subtree: true,
+            characterData: true,
+            attributes: true,
+            attributeFilter: ['lang', 'hidden', 'aria-hidden', 'class', 'style']
+        });
+    }
+
+    // document_idle is used by the manifest; the short delay also lets the
+    // SMS application finish its initial table render before reading it.
+    scheduleScrape(250);
 })();
-
-// 67
-// 67 67
-// 67 67 67 67
-// 67 67 67 67 67 67
-
-//                             ╱|、
-//                        (˚ˎ 。7  
-//                         |、˜〵          
-//                        じしˍ,)ノ
