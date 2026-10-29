@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Better.SMS",
   "short_name": "BetterSMS",
-  "version": "1.8.1",
+  "version": "1.9.0",
   "description": "Better.SMS：選科篩選、功課和提醒，以及時間分析（測試版）。",
   "permissions": [
     "activeTab",
@@ -40,5 +40,5 @@
       "run_at": "document_idle"
     }
   ],
-  "version_name": "BetterSMS_1.8.1"
+  "version_name": "BetterSMS_1.9.0"
 }

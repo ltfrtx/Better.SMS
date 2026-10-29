@@ -5,7 +5,7 @@
     const DATE = BetterSMSDateUtils;
     const SUBJECT = BetterSMSSubjectFilter;
     const CLIENT = BetterSMSSmsClient;
-    const VERSION = '1.8.1';
+    const VERSION = '1.9.0';
 
     // A fixed 800×600 root lets Chrome's action popup open at its maximum size.
     // If Chrome clamps the popup on a smaller/zoomed screen, fit the available
@@ -34,11 +34,9 @@
     const SCHEMA_VERSION = 2;
     const DEFAULT_STATE = {
         dateFilter: 'ALL', customDate: '', fromDate: '',
-        student: 'CUSTOM', mathGroup: 'ALL', x1: 'ALL', x2: 'ALL', x3: 'ALL',
-        viewMode: 'tabs', activeTab: 'homework'
+        mathGroup: 'ALL', x1: 'ALL', x2: 'ALL', x3: 'ALL',
+        viewMode: 'tabs', activeTab: 'homework', theme: 'light'
     };
-    // Retained from the original extension; every student can also use Custom.
-    const STUDENTS_DATABASE = [];
 
     let state = { ...DEFAULT_STATE };
     let homework = [];
@@ -78,7 +76,9 @@
         if (!['tabs', 'stacked'].includes(value.viewMode)) value.viewMode = 'tabs';
         if (!['homework', 'reminders', 'analysis'].includes(value.activeTab)) value.activeTab = 'homework';
         if (value.viewMode === 'stacked' && value.activeTab === 'reminders') value.activeTab = 'homework';
-        if (value.student !== 'CUSTOM' && !STUDENTS_DATABASE[Number(value.student)]) value.student = 'CUSTOM';
+        // Names are no longer offered or retained; existing Math/X choices remain intact.
+        delete value.student;
+        if (!['light', 'dark'].includes(value.theme)) value.theme = 'light';
         return value;
     }
 
@@ -283,10 +283,15 @@
         document.querySelectorAll('input[name="view-mode"]').forEach(radio => { radio.checked = radio.value === state.viewMode; });
     }
 
+    function renderTheme() {
+        document.documentElement.dataset.theme = state.theme;
+        document.querySelectorAll('input[name="theme"]').forEach(radio => { radio.checked = radio.value === state.theme; });
+    }
+
     function renderControls() {
-        const student = state.student !== 'CUSTOM' ? STUDENTS_DATABASE[Number(state.student)] : null;
-        $('profile-student').value = String(state.student);
-        $('current-student-tag').textContent = student ? student.name.split(' ')[0] : '自訂模式';
+        const selections = [state.mathGroup !== 'ALL' ? `Math ${state.mathGroup}` : '',
+            ...['x1', 'x2', 'x3'].map(key => state[key] !== 'ALL' ? `${key.toUpperCase()} ${state[key]}` : '')].filter(Boolean);
+        $('profile-summary-tag').textContent = selections.length ? selections.join(' · ') : '全部組別（未設定）';
         $('profile-math').value = state.mathGroup;
         $('profile-x1').value = state.x1;
         $('profile-x2').value = state.x2;
@@ -300,8 +305,11 @@
             ALL: '全部已載入', TODAY: '今天', TOMORROW: '明天', NEXT_SCHOOL_DAY: '下個上學天',
             NEXT_7_DAYS: '未來 7 天', NEXT_WEEK: '下星期'
         };
-        $('date-filter-summary').textContent = state.dateFilter === 'CUSTOM'
+        const selectedDateLabel = state.dateFilter === 'CUSTOM'
             ? `指定：${state.customDate}` : dateLabels[state.dateFilter] || dateLabels.ALL;
+        $('date-filter-summary').textContent = selectedDateLabel;
+        $('analysis-date-summary').textContent = selectedDateLabel;
+        renderTheme();
         $('custom-date').value = state.customDate;
         $('analysis-custom-date').value = state.customDate;
         $('fetch-from-date').value = state.fromDate || todayKey();
@@ -477,18 +485,9 @@
         if (focus) $(`tab-${name}`).focus();
     }
     function bindEvents() {
-        $('profile-student').addEventListener('change', event => {
-            state.student = event.target.value;
-            const student = STUDENTS_DATABASE[Number(state.student)];
-            if (state.student !== 'CUSTOM' && student) {
-                Object.assign(state, { mathGroup: student.math, x1: student.x1, x2: student.x2, x3: student.x3 });
-                $('profile-accordion').removeAttribute('open');
-            }
-            saveState(); renderControls(); renderRecords();
-        });
         const profileFields = { 'profile-math': 'mathGroup', 'profile-x1': 'x1', 'profile-x2': 'x2', 'profile-x3': 'x3' };
         Object.entries(profileFields).forEach(([id, key]) => $(id).addEventListener('change', event => {
-            state[key] = event.target.value; state.student = 'CUSTOM';
+            state[key] = event.target.value;
             saveState(); renderControls(); renderRecords();
         }));
         document.querySelectorAll('.date-btn').forEach(button => button.addEventListener('click', () => {
@@ -527,6 +526,11 @@
                 chooseTab(target, true);
             });
         }
+        document.querySelectorAll('input[name="theme"]').forEach(radio => radio.addEventListener('change', () => {
+            if (!radio.checked) return;
+            state.theme = radio.value;
+            renderTheme(); saveState();
+        }));
         document.querySelectorAll('input[name="view-mode"]').forEach(radio => radio.addEventListener('change', () => {
             if (!radio.checked) return;
             state.viewMode = radio.value;
@@ -565,10 +569,6 @@
     }
 
     document.addEventListener('DOMContentLoaded', async () => {
-        STUDENTS_DATABASE.forEach((student, index) => {
-            const option = document.createElement('option'); option.value = String(index); option.textContent = student.name;
-            $('profile-student').appendChild(option);
-        });
         bindEvents();
         chrome.storage.onChanged.addListener((changes, area) => {
             if (area !== 'local') return;
@@ -583,8 +583,9 @@
         try {
             const values = await storageGet(['savedState', 'homeworkList', 'reminderList', 'recordsSchemaVersion', 'completedHomeworkMap', 'sourceStartDate', 'lastUpdated', 'isSynced', 'lastSyncError', 'syncDiagnostics', 'developerMode']);
             applyStored(values, true);
-            // Persist migration once; Math Group, checkboxes and other preferences remain intact.
-            if (values.savedState && Object.prototype.hasOwnProperty.call(values.savedState, 'modules')) saveState();
+            // Persist legacy-field migration without altering groups or completion ticks.
+            if (values.savedState && (Object.prototype.hasOwnProperty.call(values.savedState, 'modules') ||
+                Object.prototype.hasOwnProperty.call(values.savedState, 'student'))) saveState();
             updateAnalysisTimer();
             expandForCurrentFilter();
             void syncRecords();

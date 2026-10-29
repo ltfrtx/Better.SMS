@@ -7,13 +7,13 @@ const root = path.join(__dirname, '..');
 const html = fs.readFileSync(path.join(root, 'popup.html'), 'utf8');
 const manifest = JSON.parse(fs.readFileSync(path.join(root, 'manifest.json'), 'utf8'));
 
-test('1.8.1 retains the toolbar action popup and declares the 800 by 600 target', () => {
+test('1.9.0 retains the toolbar action popup and declares the 800 by 600 target', () => {
     assert.equal(manifest.action.default_popup, 'popup.html');
-    assert.equal(manifest.version, '1.8.1');
-    assert.equal(manifest.version_name, 'BetterSMS_1.8.1');
+    assert.equal(manifest.version, '1.9.0');
+    assert.equal(manifest.version_name, 'BetterSMS_1.9.0');
     assert.match(html, /html\s*\{\s*width:\s*800px;\s*height:\s*600px;/);
     assert.match(html, /constrained-screen/);
-    assert.match(html, /BetterSMS_1\.8\.1/);
+    assert.match(html, /BetterSMS_1\.9\.0/);
 });
 
 test('wide layout and stacked-mode sections keep homework and reminders distinct', () => {
@@ -39,5 +39,21 @@ test('wide analysis overview groups the original estimate, metrics and square SV
     assert.equal(target.querySelector('.analysis-donut').getAttribute('viewBox'), '0 0 120 120');
     assert.equal(target.querySelector('#analysis-total').textContent, '30 分鐘');
     assert.match(target.querySelector('.analysis-scope').textContent, /不含提醒/);
+    dom.window.close();
+});
+
+test('header is sticky and student name selector is removed while four subjects remain', () => {
+    assert.match(html, /\.header\s*\{[^}]*position:\s*sticky;[^}]*top:\s*-14px;/s);
+    const dom = new JSDOM(html);
+    const doc = dom.window.document;
+    assert.equal(doc.querySelector('#profile-student'), null);
+    assert.doesNotMatch(doc.querySelector('#profile-accordion').textContent, /選擇學生姓名/);
+    for (const id of ['profile-math', 'profile-x1', 'profile-x2', 'profile-x3']) {
+        assert.ok(doc.getElementById(id), `missing ${id}`);
+    }
+    assert.equal(doc.querySelector('#analysis-date-accordion').open, false);
+    assert.ok(doc.querySelector('#analysis-date-accordion #analysis-custom-date'));
+    assert.ok(doc.querySelector('#analysis-date-summary'));
+    assert.equal(doc.querySelectorAll('input[name="theme"]').length, 2);
     dom.window.close();
 });

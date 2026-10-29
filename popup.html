@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh-TW">
+<html lang="zh-TW" data-theme="light">
 <head>
   <meta charset="UTF-8">
   <title>Better.SMS</title>
@@ -29,11 +29,20 @@
       color: #1e293b;
     }
 
+    /* The title remains visible while the body is scrolled. */
     .header {
+      position: sticky;
+      /* Compensate for the negative top margin inside the padded scroll body. */
+      top: -14px;
+      z-index: 4;
       display: flex;
       justify-content: space-between;
       align-items: flex-start;
-      margin-bottom: 8px;
+      margin: -14px -14px 8px;
+      padding: 14px 14px 9px;
+      background: #f8fafc;
+      border-bottom: 1px solid #e2e8f0;
+      box-shadow: 0 2px 8px rgba(15, 23, 42, .05);
     }
 
     .header-title-group {
@@ -179,7 +188,7 @@
       font-weight: bold;
     }
 
-    /* 新增：可收起的個人選科與學生選擇 (Collapsible Accordion) */
+    /* 可收起的個人選科 (Collapsible Accordion) */
     .profile-box {
       background: #f1f5f9;
       border: 1px solid #e2e8f0;
@@ -200,13 +209,15 @@
       background: #f1f5f9;
       transition: background 0.2s;
     }
+    .profile-summary > div { min-width: 0; overflow-wrap: anywhere; }
+    .profile-summary .chevron-icon { flex: none; margin-left: 8px; }
     .profile-summary:hover {
       background: #e2e8f0;
     }
     .profile-summary::-webkit-details-marker {
       display: none;
     }
-    .student-tag {
+    .profile-tag {
       font-weight: normal;
       color: #475569;
       margin-left: 6px;
@@ -225,26 +236,6 @@
       padding: 10px;
       border-top: 1px solid #e2e8f0;
       background: #ffffff;
-    }
-    .student-select-field {
-      margin-bottom: 8px;
-      display: flex;
-      flex-direction: column;
-      gap: 3px;
-    }
-    .student-select-field label {
-      font-size: 12px;
-      font-weight: bold;
-      color: #0369a1;
-    }
-    .student-select-field select {
-      padding: 6px 8px;
-      font-size: 12px;
-      border-radius: 6px;
-      border: 1px solid #0284c7;
-      background: #ffffff;
-      outline: none;
-      font-weight: 500;
     }
     .profile-grid {
       display: grid;
@@ -429,7 +420,7 @@
     .settings-button:hover { background: #0369a1; }
     .settings-panel {
       position: fixed; z-index: 6; right: 14px; bottom: 65px; width: min(340px, calc(100vw - 28px));
-      max-height: calc(100vh - 85px); overflow: auto; padding: 13px;
+      max-height: max(100px, calc(100vh - 145px)); overflow: auto; padding: 13px;
       border: 1px solid #cbd5e1; border-radius: 10px; background: #fff;
       box-shadow: 0 10px 30px rgba(15,23,42,.18); font-size: 12px;
     }
@@ -440,6 +431,10 @@
     .settings-header h3 { margin: 0; color: #0f172a; font-size: 14px; }
     .settings-close { border: 0; background: transparent; color: #64748b; cursor: pointer; font-size: 20px; line-height: 1; }
     .settings-panel fieldset { padding: 0; margin: 0; border: 0; }
+    .theme-options { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+    .layout-choice.theme-option { margin: 0; align-items: center; min-width: 0; }
+    .layout-choice.theme-option input { margin: 0; }
+    .theme-option span { overflow-wrap: anywhere; }
     .settings-panel legend, .settings-label { font-weight: 700; color: #475569; margin: 0 0 7px; }
     .layout-choice {
       display: flex; gap: 8px; align-items: flex-start; padding: 8px; margin: 4px 0;
@@ -458,6 +453,7 @@
     .analysis-title { color: #0369a1; font-size: 12px; font-weight: 700; margin-bottom: 8px; }
     .analysis-toolbar .date-filter-group { margin-bottom: 8px; }
     .analysis-toolbar .custom-date-row { margin: 0; }
+    .analysis-date-box { margin-bottom: 0; }
     .analysis-filter-help { margin: 6px 0 0; color: #64748b; font-size: 10px; line-height: 1.45; }
     .analysis-content { padding: 10px; }
     .analysis-scope { margin: 0 0 8px; color: #64748b; font-size: 10px; line-height: 1.5; }
@@ -518,8 +514,9 @@
     .analysis-donut { aspect-ratio: 1 / 1; }
     @media (min-width: 680px) {
       body { padding: 16px 18px 76px; }
+      .header { top: -16px; margin: -16px -18px 8px; padding: 16px 18px 10px; }
       h2 { font-size: 20px; }
-      .author, .status-bar, .sync-actions, .student-tag, .date-current { font-size: 12px; }
+      .author, .status-bar, .sync-actions, .profile-tag, .date-current { font-size: 12px; }
       .date-summary, .profile-summary, .list-tab, .small-button, .analysis-title { font-size: 13px; }
       .date-filter-group { grid-template-columns: repeat(6, minmax(0, 1fr)); }
       .date-btn { min-width: 0; min-height: 34px; font-size: 12px; }
@@ -546,13 +543,94 @@
       .analysis-task-date, .analysis-task-warning { font-size: 11px; }
     }
 
+
+    /* User-selected dark mode. All state is stored locally; no external theme service. */
+    html[data-theme="dark"] { color-scheme: dark; background: #0b1220; }
+    html[data-theme="dark"] body { background: #0b1220; color: #e3edf7; }
+    html[data-theme="dark"] .header { background: #0b1220; border-color: #2d3d53; box-shadow: 0 2px 8px rgba(0,0,0,.3); }
+    html[data-theme="dark"] h2, html[data-theme="dark"] .settings-header h3 { color: #f1f7fc; }
+    html[data-theme="dark"] .status-bar, html[data-theme="dark"] .date-box,
+    html[data-theme="dark"] .profile-content, html[data-theme="dark"] .hw-card,
+    html[data-theme="dark"] .settings-panel, html[data-theme="dark"] .settings-header,
+    html[data-theme="dark"] .dev-tools, html[data-theme="dark"] #analysis-section {
+      background: #152237; border-color: #34475f; color: #dce8f3;
+    }
+    html[data-theme="dark"] .profile-box, html[data-theme="dark"] .profile-summary,
+    html[data-theme="dark"] .list-tabs, html[data-theme="dark"] .analysis-toolbar,
+    html[data-theme="dark"] .analysis-day-summary, html[data-theme="dark"] .analysis-empty,
+    html[data-theme="dark"] .analysis-metric, html[data-theme="dark"] .layout-choice {
+      background: #1b2b40; border-color: #34475f; color: #dce8f3;
+    }
+    html[data-theme="dark"] .date-summary:hover, html[data-theme="dark"] .profile-summary:hover,
+    html[data-theme="dark"] .dev-actions button:hover, html[data-theme="dark"] .small-button:hover { background: #273b53; }
+    html[data-theme="dark"] .date-btn, html[data-theme="dark"] .small-button,
+    html[data-theme="dark"] .profile-field select, html[data-theme="dark"] .custom-date-row input,
+    html[data-theme="dark"] .settings-date input, html[data-theme="dark"] .dev-actions button {
+      background: #1b2b40; border-color: #4b5e76; color: #e4eef8;
+    }
+    html[data-theme="dark"] .date-btn.active { background: #0369a1; border-color: #38bdf8; color: #fff; }
+    html[data-theme="dark"] .list-tab { color: #b5c6d8; }
+    html[data-theme="dark"] .list-tab[aria-selected="true"] { background: #2a425d; color: #b8e8ff; }
+    html[data-theme="dark"] .date-current { background: #114569; color: #c6ebff; }
+    html[data-theme="dark"] .date-summary, html[data-theme="dark"] .profile-summary,
+    html[data-theme="dark"] .analysis-title, html[data-theme="dark"] .subject,
+    html[data-theme="dark"] .analysis-day-date, html[data-theme="dark"] .analysis-task-title,
+    html[data-theme="dark"] .sync-actions a, html[data-theme="dark"] .dev-message { color: #91d9ff; }
+    html[data-theme="dark"] .author, html[data-theme="dark"] .profile-tag,
+    html[data-theme="dark"] .update-time, html[data-theme="dark"] .sync-actions .source-date,
+    html[data-theme="dark"] .chevron-icon, html[data-theme="dark"] .tab-count,
+    html[data-theme="dark"] .profile-help, html[data-theme="dark"] .settings-help,
+    html[data-theme="dark"] .layout-choice small, html[data-theme="dark"] .analysis-filter-help,
+    html[data-theme="dark"] .analysis-scope, html[data-theme="dark"] .analysis-hero-note,
+    html[data-theme="dark"] .analysis-metric small, html[data-theme="dark"] .analysis-legend-label small,
+    html[data-theme="dark"] .analysis-task-date, html[data-theme="dark"] .dev-mode-state,
+    html[data-theme="dark"] .dev-help, html[data-theme="dark"] .footer,
+    html[data-theme="dark"] .empty, html[data-theme="dark"] .list-heading span { color: #b4c5d5; }
+    html[data-theme="dark"] .content, html[data-theme="dark"] .profile-field label,
+    html[data-theme="dark"] .settings-panel legend, html[data-theme="dark"] .settings-label,
+    html[data-theme="dark"] .layout-choice strong, html[data-theme="dark"] .list-heading,
+    html[data-theme="dark"] .analysis-hero-label, html[data-theme="dark"] .analysis-hero-time span,
+    html[data-theme="dark"] .analysis-metric strong, html[data-theme="dark"] .analysis-legend-label,
+    html[data-theme="dark"] .analysis-list-heading, html[data-theme="dark"] .analysis-day-total,
+    html[data-theme="dark"] .analysis-task-duration, html[data-theme="dark"] .analysis-task-content,
+    html[data-theme="dark"] .custom-date-row, html[data-theme="dark"] .dev-summary { color: #d6e4ef; }
+    html[data-theme="dark"] .sync-badge.synced { color: #6ee7b7; }
+    html[data-theme="dark"] .sync-badge.syncing { color: #fcd34d; }
+    html[data-theme="dark"] .sync-badge.error { color: #fca5a5; }
+    html[data-theme="dark"] .sync-badge.pending { color: #b4c5d5; }
+    html[data-theme="dark"] .date-badge { color: #9cf2d2; background: #104437; }
+    html[data-theme="dark"] .hw-card.completed { background: #1a293b; border-color: #40516a; opacity: .8; }
+    html[data-theme="dark"] .hw-card.completed .content, html[data-theme="dark"] .hw-card.completed .subject { color: #a4b5c8; }
+    html[data-theme="dark"] .footer, html[data-theme="dark"] .settings-divider,
+    html[data-theme="dark"] .profile-content, html[data-theme="dark"] .date-content,
+    html[data-theme="dark"] .analysis-task { border-color: #34475f; }
+    html[data-theme="dark"] .analysis-day { border-color: #40516a; }
+    html[data-theme="dark"] .analysis-hero { background: #0d314a; border-color: #275c7c; }
+    html[data-theme="dark"] .analysis-hero-time strong { color: #91d9ff; }
+    html[data-theme="dark"] .analysis-chart { background: #19283d; border-color: #34475f; }
+    html[data-theme="dark"] .analysis-donut-number { fill: #f1f7fc; }
+    html[data-theme="dark"] .analysis-donut-unit { fill: #b4c5d5; }
+    html[data-theme="dark"] .analysis-donut circle:first-child { stroke: #3c4f64; }
+    html[data-theme="dark"] .analysis-insight { color: #b8e8ff; background: #153a55; }
+    html[data-theme="dark"] .analysis-note { color: #d2dfec; background: #243449; }
+    html[data-theme="dark"] .message, html[data-theme="dark"] .verify-note,
+    html[data-theme="dark"] .analysis-alert, html[data-theme="dark"] .analysis-task-warning {
+      color: #fde8a4; background: #4b3513; border-color: #806329;
+    }
+    html[data-theme="dark"] .beta-pill { color: #ffe5a3; background: #4b3513; border-color: #806329; }
+    html[data-theme="dark"] .tab-beta { color: #fcd34d; }
+    html[data-theme="dark"] .settings-close { color: #c4d3e2; }
+    html[data-theme="dark"] button:focus-visible, html[data-theme="dark"] input:focus-visible,
+    html[data-theme="dark"] select:focus-visible, html[data-theme="dark"] summary:focus-visible,
+    html[data-theme="dark"] a:focus-visible { outline-color: #7dd3fc; }
+
   </style>
 </head>
 <body>
   <div class="header">
     <div class="header-title-group">
       <h2 id="brand-title" tabindex="0">Better.SMS</h2>
-      <div class="author">BetterSMS_1.8.1</div>
+      <div class="author">BetterSMS_1.9.0</div>
     </div>
     <span id="total-count" class="badge">0 項</span>
   </div>
@@ -594,14 +672,10 @@
 
   <details class="profile-box" id="profile-accordion">
     <summary class="profile-summary">
-      <div>👤 學生設定：<span id="current-student-tag" class="student-tag">自訂模式</span></div>
+      <div>📚 選科設定：<span id="profile-summary-tag" class="profile-tag">全部組別（未設定）</span></div>
       <span class="chevron-icon">▼</span>
     </summary>
     <div class="profile-content">
-      <div class="student-select-field">
-        <label for="profile-student">選擇學生姓名：</label>
-        <select id="profile-student"><option value="CUSTOM">-- 自訂 / 手動選擇 --</option></select>
-      </div>
       <div class="profile-grid">
         <div class="profile-field">
           <label for="profile-math">Math 數學組別：</label>
@@ -663,20 +737,28 @@
   <section id="analysis-section" role="tabpanel" aria-labelledby="tab-analysis" hidden>
     <div class="analysis-toolbar">
       <div class="analysis-title">◉ 功課時間分析 <span class="beta-pill">測試版</span></div>
-      <div class="date-filter-group" aria-label="時間分析日期篩選">
-        <button type="button" class="date-btn" data-date-filter="ALL">全部已載入</button>
-        <button type="button" class="date-btn" data-date-filter="TODAY">今天</button>
-        <button type="button" class="date-btn" data-date-filter="TOMORROW">明天</button>
-        <button type="button" class="date-btn" data-date-filter="NEXT_SCHOOL_DAY" title="只跳過週末，未計算公眾假期或學校假期">下個上學天</button>
-        <button type="button" class="date-btn" data-date-filter="NEXT_7_DAYS" title="包括今天在內的 7 天">未來 7 天</button>
-        <button type="button" class="date-btn" data-date-filter="NEXT_WEEK" title="下一個星期一至星期日">下星期</button>
-      </div>
-      <div class="custom-date-row">
-        <label for="analysis-custom-date">指定日期：</label>
-        <input id="analysis-custom-date" type="date">
-        <button id="analysis-apply-custom-date" class="small-button" type="button">查看該日</button>
-      </div>
-      <p class="analysis-filter-help">日期與功課／提醒共用。下個上學天只跳過週末，不包括假期。</p>
+      <details class="date-box analysis-date-box" id="analysis-date-accordion">
+        <summary class="date-summary">
+          <span>日期篩選 <span id="analysis-date-summary" class="date-current">全部已載入</span></span>
+          <span class="chevron-icon" aria-hidden="true">▼</span>
+        </summary>
+        <div class="date-content">
+          <div class="date-filter-group" aria-label="時間分析日期篩選">
+            <button type="button" class="date-btn" data-date-filter="ALL">全部已載入</button>
+            <button type="button" class="date-btn" data-date-filter="TODAY">今天</button>
+            <button type="button" class="date-btn" data-date-filter="TOMORROW">明天</button>
+            <button type="button" class="date-btn" data-date-filter="NEXT_SCHOOL_DAY" title="只跳過週末，未計算公眾假期或學校假期">下個上學天</button>
+            <button type="button" class="date-btn" data-date-filter="NEXT_7_DAYS" title="包括今天在內的 7 天">未來 7 天</button>
+            <button type="button" class="date-btn" data-date-filter="NEXT_WEEK" title="下一個星期一至星期日">下星期</button>
+          </div>
+          <div class="custom-date-row">
+            <label for="analysis-custom-date">指定日期：</label>
+            <input id="analysis-custom-date" type="date">
+            <button id="analysis-apply-custom-date" class="small-button" type="button">查看該日</button>
+          </div>
+          <p class="analysis-filter-help">日期與功課／提醒共用。下個上學天只跳過週末，不包括假期。</p>
+        </div>
+      </details>
     </div>
     <div id="analysis-content" class="analysis-content"></div>
   </section>
@@ -684,6 +766,14 @@
   <button id="settings-button" class="settings-button" type="button" aria-label="Better.SMS 設定" aria-controls="settings-panel" aria-haspopup="dialog" aria-expanded="false" title="Better.SMS 設定">⚙</button>
   <div id="settings-panel" class="settings-panel" role="dialog" aria-label="Better.SMS 設定" hidden>
     <div class="settings-header"><h3>Better.SMS 設定</h3><button id="settings-close" class="settings-close" type="button" aria-label="關閉設定">×</button></div>
+    <fieldset>
+      <legend>外觀模式</legend>
+      <div class="theme-options">
+        <label class="layout-choice theme-option"><input type="radio" name="theme" value="light" checked><span><strong>☀ 淺色（白色）</strong></span></label>
+        <label class="layout-choice theme-option"><input type="radio" name="theme" value="dark"><span><strong>☾ 深色（黑暗）</strong></span></label>
+      </div>
+    </fieldset>
+    <hr class="settings-divider">
     <fieldset>
       <legend>功課與提醒的顯示方式</legend>
       <label class="layout-choice"><input type="radio" name="view-mode" value="tabs"><span><strong>頁籤模式</strong><small>切換查看功課或提醒</small></span></label>
