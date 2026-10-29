@@ -55,24 +55,38 @@ test('separates math groups using group markers and teacher codes', () => {
     assert.match(conflict.warning, /不一致/);
 });
 
-test('M1 and M2 are independent from normal groups, and default to showing all', () => {
+test('Math Group alone controls M1/M2, including Gp6 and the unconfigured case', () => {
     const m1 = item('Mathematics', 'CPC', '*M1: revision');
     const m2 = item('Mathematics', 'SYT', 'M2 homework');
-    assert.equal(visible(m1), false);
-    assert.equal(visible(m2), false);
-    assert.equal(visible(m1, { ...profile, modules: 'M1' }), true);
-    assert.equal(visible(m2, { ...profile, modules: 'M1' }), false);
-    assert.equal(visible(m2, { ...profile, modules: 'M2' }), true);
-    assert.equal(visible(m1, { ...profile, modules: 'ALL' }), true);
-    assert.equal(visible(item('Mathematics Extended', 'CPC', 'exercise'), { ...profile, modules: 'M1' }), true);
-    // CPC is Gp1 as well as M1: without a group label this may be M1,
-    // so retain it with a warning; an explicit Gp1 is reliably filtered.
-    const ambiguous = filter.evaluate(item('Mathematics', 'CPC', 'exercise'), { ...profile, modules: 'M1' });
-    assert.equal(ambiguous.visible, true);
-    assert.match(ambiguous.warning, /M1/);
-    assert.equal(visible(item('Mathematics', 'CPC', 'Gp1 exercise'), { ...profile, modules: 'M1' }), false);
-    assert.equal(visible(item('Mathematics', 'SYT', 'exercise'), { ...profile, modules: 'M2' }), true);
-    assert.equal(visible(item('Other', 'SYT', '*M2: module work'), { ...profile, modules: 'M2' }), true);
+    const expected = { Gp1: ['M1', true, false], Gp2: ['M2', false, true],
+        Gp3: ['NONE', false, false], Gp4: ['NONE', false, false],
+        Gp5: ['NONE', false, false], Gp6: ['NONE', false, false], ALL: ['ALL', true, true] };
+    for (const [group, [module, hasM1, hasM2]] of Object.entries(expected)) {
+        assert.equal(filter.moduleForMathGroup(group), module);
+        // Explicitly contradictory beta-era settings are ignored.
+        const p = { ...profile, mathGroup: group, modules: hasM1 ? 'NONE' : 'BOTH' };
+        assert.equal(visible(m1, p), hasM1, `${group} M1`);
+        assert.equal(visible(m2, p), hasM2, `${group} M2`);
+    }
+    assert.equal(visible(item('Mathematics Extended', 'CPC', 'exercise'), { ...profile, mathGroup: 'Gp1' }), true);
+    assert.equal(visible(item('Mathematics Extended', 'CPC', 'exercise'), { ...profile, mathGroup: 'Gp6', modules: 'M1' }), false);
+    assert.equal(visible(item('Other', 'SYT', '*M2: module work'), { ...profile, mathGroup: 'Gp2' }), true);
+    assert.equal(visible(item('Mathematics', 'CPC', 'Gp1 exercise'), { ...profile, mathGroup: 'Gp6', modules: 'M1' }), false);
+    assert.equal(visible(item('Mathematics', 'SYT', 'exercise'), { ...profile, mathGroup: 'Gp2' }), true);
+    assert.equal(visible(item('Mathematics', 'HWS', 'Gp6 exercise'), { ...profile, mathGroup: 'ALL', modules: 'NONE' }), true);
+});
+
+test('M1/M2 labels that conflict with a known teacher use the teacher with a warning', () => {
+    const wrongM1 = item('Mathematics', 'SYT', 'M1: revision');
+    const wrongM2 = item('Mathematics', 'CPC', 'M2: revision');
+    const gp1 = { ...profile, mathGroup: 'Gp1' }, gp2 = { ...profile, mathGroup: 'Gp2' };
+    assert.equal(visible(wrongM1, gp1), false);
+    const m2Decision = filter.evaluate(wrongM1, gp2);
+    assert.equal(m2Decision.visible, true);
+    assert.match(m2Decision.warning, /依老師歸入 M2/);
+    assert.equal(visible(wrongM2, gp2), false);
+    assert.match(filter.evaluate(wrongM2, gp1).warning, /依老師歸入 M1/);
+    assert.equal(visible(item('Mathematics', '無', 'M2 exercise'), gp2), true);
 });
 
 test('teacher wins when a same-subject X label conflicts with the timetable', () => {

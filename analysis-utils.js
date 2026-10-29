@@ -3,6 +3,7 @@
     'use strict';
 
     // Prevent malformed/overflowing values from producing nonsensical dates.
+    const dates = root.BetterSMSDateUtils || (typeof require === 'function' ? require('./date-utils.js') : null);
     const MAX_MINUTES = 100 * 366 * 24 * 60;
     function validMinutes(value) { return Number.isFinite(value) && value >= 0 && value <= MAX_MINUTES; }
 
@@ -68,7 +69,25 @@
         return { rows, groups, totalMinutes, knownCount, unknownCount, zeroCount, start, finish };
     }
 
-    const api = { parseMinutes, formatDuration, summarize };
+    // Group task rows by the SMS date. The totals remain separate from the
+    // overall subject donut so students can compare tomorrow and other dates.
+    function groupByDate(rows, referenceDate = new Date()) {
+        const byKey = new Map();
+        (Array.isArray(rows) ? rows : []).forEach(row => {
+            const task = row && row.task ? row.task : {};
+            const date = dates && (dates.fromDateKey(task.dateISO) || dates.parseHomeworkDate(task.date, referenceDate));
+            const key = date ? dates.toDateKey(date) : 'unknown';
+            if (!byKey.has(key)) byKey.set(key, { key, date, rows: [], minutes: 0, knownCount: 0, unknownCount: 0 });
+            const day = byKey.get(key);
+            day.rows.push(row);
+            if (row.minutes === null) day.unknownCount += 1;
+            else { day.knownCount += 1; day.minutes += row.minutes; }
+        });
+        return [...byKey.values()].map(day => ({ ...day, minutes: Math.round(day.minutes * 100) / 100 }))
+            .sort((a, b) => a.key === 'unknown' ? 1 : b.key === 'unknown' ? -1 : a.key.localeCompare(b.key));
+    }
+
+    const api = { parseMinutes, formatDuration, summarize, groupByDate };
     root.BetterSMSAnalysis = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(globalThis);

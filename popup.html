@@ -450,17 +450,15 @@
     .settings-divider { border: 0; border-top: 1px solid #e2e8f0; margin: 12px 0; }
     .settings-date { display: flex; gap: 6px; }
     .settings-help { margin: 6px 0 0; color: #64748b; font-size: 11px; line-height: 1.5; }
-    .analysis-tools { border: 1px solid #dbe5ef; border-radius: 8px; background: #fff; overflow: hidden; }
-    .analysis-summary {
-      display: flex; align-items: center; justify-content: space-between; gap: 6px;
-      padding: 9px 10px; color: #0369a1; font-weight: 700; cursor: pointer;
-      user-select: none; list-style: none; background: #f0f9ff;
-    }
-    .analysis-summary::-webkit-details-marker { display: none; }
-    .analysis-summary:hover { background: #e0f2fe; }
-    .analysis-tools[open] .chevron-icon { transform: rotate(180deg); }
     .beta-pill { display: inline-block; margin-left: 4px; padding: 2px 6px; border-radius: 8px; background: #fef3c7; color: #92400e; font-size: 10px; font-weight: 700; }
-    .analysis-content { padding: 10px; border-top: 1px solid #dbe5ef; }
+    .tab-beta { color: #b45309; font-size: 10px; }
+    #analysis-section { border: 1px solid #dbe5ef; border-radius: 8px; background: #fff; overflow: hidden; }
+    .analysis-toolbar { padding: 10px; background: #f8fcff; border-bottom: 1px solid #dbe5ef; }
+    .analysis-title { color: #0369a1; font-size: 12px; font-weight: 700; margin-bottom: 8px; }
+    .analysis-toolbar .date-filter-group { margin-bottom: 8px; }
+    .analysis-toolbar .custom-date-row { margin: 0; }
+    .analysis-filter-help { margin: 6px 0 0; color: #64748b; font-size: 10px; line-height: 1.45; }
+    .analysis-content { padding: 10px; }
     .analysis-scope { margin: 0 0 8px; color: #64748b; font-size: 10px; line-height: 1.5; }
     .analysis-empty { padding: 20px 8px; border-radius: 6px; background: #f8fafc; text-align: center; color: #64748b; font-size: 11px; line-height: 1.5; }
     .analysis-hero { padding: 10px; border-radius: 8px; background: #eff8ff; border: 1px solid #d5edfb; }
@@ -488,7 +486,14 @@
     .analysis-legend-label small { margin-top: 1px; color: #64748b; font-size: 10px; }
     .analysis-insight { margin: 8px 0; padding: 6px 7px; color: #075985; background: #f0f9ff; border-radius: 5px; font-size: 10px; }
     .analysis-list-heading { margin: 12px 0 6px; color: #475569; font-size: 11px; font-weight: 700; }
-    .analysis-task-list { max-height: 230px; overflow: auto; list-style: none; margin: 0; padding: 0; }
+    .analysis-day { margin-bottom: 6px; border: 1px solid #dbe5ef; border-radius: 6px; overflow: hidden; }
+    .analysis-day-summary { display: flex; align-items: center; gap: 5px; padding: 8px; background: #f8fafc; cursor: pointer; list-style: none; }
+    .analysis-day-summary::-webkit-details-marker { display: none; }
+    .analysis-day-summary::before { content: '▸'; color: #64748b; font-size: 11px; transition: transform .15s; }
+    .analysis-day[open] .analysis-day-summary::before { transform: rotate(90deg); }
+    .analysis-day-date { color: #0369a1; font-size: 11px; font-weight: 700; }
+    .analysis-day-total { margin-left: auto; color: #475569; text-align: right; font-size: 10px; line-height: 1.4; }
+    .analysis-task-list { list-style: none; margin: 0; padding: 0 9px 3px; }
     .analysis-task { padding: 7px 0; border-top: 1px solid #e2e8f0; }
     .analysis-task-title { display: flex; justify-content: space-between; gap: 6px; color: #0369a1; font-size: 11px; }
     .analysis-task-duration { flex: none; color: #475569; font-weight: 600; }
@@ -502,7 +507,7 @@
   <div class="header">
     <div class="header-title-group">
       <h2 id="brand-title" tabindex="0">Better.SMS</h2>
-      <div class="author">V1.7.0_beta_alpha</div>
+      <div class="author">BetterSMS_1.8.0</div>
     </div>
     <span id="total-count" class="badge">0 項</span>
   </div>
@@ -529,6 +534,7 @@
       <div class="date-filter-group" aria-label="日期篩選">
         <button type="button" class="date-btn active" data-date-filter="ALL">全部已載入</button>
         <button type="button" class="date-btn" data-date-filter="TODAY">今天</button>
+        <button type="button" class="date-btn" data-date-filter="TOMORROW">明天</button>
         <button type="button" class="date-btn" data-date-filter="NEXT_SCHOOL_DAY" title="只跳過週末，未計算公眾假期或學校假期">下個上學天</button>
         <button type="button" class="date-btn" data-date-filter="NEXT_7_DAYS" title="包括今天在內的 7 天">未來 7 天</button>
         <button type="button" class="date-btn" data-date-filter="NEXT_WEEK" title="下一個星期一至星期日">下星期</button>
@@ -556,9 +562,9 @@
           <label for="profile-math">Math 數學組別：</label>
           <select id="profile-math">
             <option value="ALL">全部組別（未設定）</option>
-            <option value="Gp1">Gp1 (CPC)</option><option value="Gp2">Gp2 (SYT)</option>
-            <option value="Gp3">Gp3 (AWY)</option><option value="Gp4">Gp4 (NOK)</option>
-            <option value="Gp5">Gp5 (TKP)</option><option value="Gp6">Gp6 (HWS)</option>
+            <option value="Gp1">Gp1 (CPC) · M1</option><option value="Gp2">Gp2 (SYT) · M2</option>
+            <option value="Gp3">Gp3 (AWY) · 不修讀 M1/M2</option><option value="Gp4">Gp4 (NOK) · 不修讀 M1/M2</option>
+            <option value="Gp5">Gp5 (TKP) · 不修讀 M1/M2</option><option value="Gp6">Gp6 (HWS) · 不修讀 M1/M2</option>
           </select>
         </div>
         <div class="profile-field">
@@ -588,32 +594,46 @@
             <option value="ICT">ICT 資訊科技 (YMT)</option><option value="PHY">PHY 物理 (FHM)</option>
           </select>
         </div>
-        <div class="profile-field">
-          <label for="profile-modules">M1 / M2：</label>
-          <select id="profile-modules">
-            <option value="ALL">未設定（全部顯示）</option>
-            <option value="NONE">不修讀 M1 / M2</option>
-            <option value="M1">修讀 M1 (CPC)</option>
-            <option value="M2">修讀 M2 (SYT)</option>
-            <option value="BOTH">修讀 M1 及 M2</option>
-          </select>
-        </div>
+
       </div>
-      <p class="profile-help">功課和提醒使用同一套選科。中文、英文和 STEAM 一律顯示；未設定的組別不會過濾；其他無法辨識的項目會保留並提示核對。</p>
+      <p class="profile-help">Gp1 自動包含 M1；Gp2 自動包含 M2；Gp3–Gp6 不修讀 M1／M2。功課和提醒使用同一套選科。中文、英文和 STEAM 一律顯示；未設定的組別不會過濾；其他無法辨識的項目會保留並提示核對。</p>
     </div>
   </details>
 
-  <div id="list-tabs" class="list-tabs" role="tablist" aria-label="功課和提醒">
-    <button type="button" id="tab-homework" class="list-tab" role="tab" aria-controls="homework-section" aria-selected="true">功課 <span id="tab-homework-count" class="tab-count">0</span></button>
+  <div id="list-tabs" class="list-tabs" role="tablist" aria-label="功課、提醒和時間分析">
+    <button type="button" id="tab-homework" class="list-tab" role="tab" aria-controls="homework-section" aria-selected="true"><span id="homework-tab-label">功課</span> <span id="tab-homework-count" class="tab-count">0</span></button>
     <button type="button" id="tab-reminders" class="list-tab" role="tab" aria-controls="reminders-section" aria-selected="false" tabindex="-1">提醒 <span id="tab-reminders-count" class="tab-count">0</span></button>
+    <button type="button" id="tab-analysis" class="list-tab" role="tab" aria-controls="analysis-section" aria-selected="false" tabindex="-1">時間分析 <span class="tab-beta">β</span></button>
   </div>
-  <section id="homework-section" class="list-section" role="tabpanel" aria-labelledby="tab-homework">
-    <div class="list-heading" id="homework-heading" hidden>功課 <span id="homework-section-count"></span></div>
-    <div id="hw-list"><div class="empty">載入中…</div></div>
-  </section>
-  <section id="reminders-section" class="list-section" role="tabpanel" aria-labelledby="tab-reminders" hidden>
-    <div class="list-heading" id="reminders-heading" hidden>提醒 <span id="reminders-section-count"></span></div>
-    <div id="reminder-list"><div class="empty">載入中…</div></div>
+  <div id="lists-panel" role="presentation">
+    <section id="homework-section" class="list-section" role="tabpanel" aria-labelledby="tab-homework">
+      <div class="list-heading" id="homework-heading" hidden>功課 <span id="homework-section-count"></span></div>
+      <div id="hw-list"><div class="empty">載入中…</div></div>
+    </section>
+    <section id="reminders-section" class="list-section" role="tabpanel" aria-labelledby="tab-reminders" hidden>
+      <div class="list-heading" id="reminders-heading" hidden>提醒 <span id="reminders-section-count"></span></div>
+      <div id="reminder-list"><div class="empty">載入中…</div></div>
+    </section>
+  </div>
+  <section id="analysis-section" role="tabpanel" aria-labelledby="tab-analysis" hidden>
+    <div class="analysis-toolbar">
+      <div class="analysis-title">◉ 功課時間分析 <span class="beta-pill">測試版</span></div>
+      <div class="date-filter-group" aria-label="時間分析日期篩選">
+        <button type="button" class="date-btn" data-date-filter="ALL">全部已載入</button>
+        <button type="button" class="date-btn" data-date-filter="TODAY">今天</button>
+        <button type="button" class="date-btn" data-date-filter="TOMORROW">明天</button>
+        <button type="button" class="date-btn" data-date-filter="NEXT_SCHOOL_DAY" title="只跳過週末，未計算公眾假期或學校假期">下個上學天</button>
+        <button type="button" class="date-btn" data-date-filter="NEXT_7_DAYS" title="包括今天在內的 7 天">未來 7 天</button>
+        <button type="button" class="date-btn" data-date-filter="NEXT_WEEK" title="下一個星期一至星期日">下星期</button>
+      </div>
+      <div class="custom-date-row">
+        <label for="analysis-custom-date">指定日期：</label>
+        <input id="analysis-custom-date" type="date">
+        <button id="analysis-apply-custom-date" class="small-button" type="button">查看該日</button>
+      </div>
+      <p class="analysis-filter-help">日期與功課／提醒共用。下個上學天只跳過週末，不包括假期。</p>
+    </div>
+    <div id="analysis-content" class="analysis-content"></div>
   </section>
 
   <button id="settings-button" class="settings-button" type="button" aria-label="Better.SMS 設定" aria-controls="settings-panel" aria-haspopup="dialog" aria-expanded="false" title="Better.SMS 設定">⚙</button>
@@ -624,14 +644,6 @@
       <label class="layout-choice"><input type="radio" name="view-mode" value="tabs"><span><strong>頁籤模式</strong><small>切換查看功課或提醒</small></span></label>
       <label class="layout-choice"><input type="radio" name="view-mode" value="stacked"><span><strong>上下分區</strong><small>同時顯示兩個清單</small></span></label>
     </fieldset>
-    <hr class="settings-divider">
-    <details class="analysis-tools" id="analysis-tools">
-      <summary class="analysis-summary">
-        <span>◉ 功課時間分析 <span class="beta-pill">測試版</span></span>
-        <span class="chevron-icon" aria-hidden="true">▼</span>
-      </summary>
-      <div id="analysis-content" class="analysis-content"></div>
-    </details>
     <hr class="settings-divider">
     <div class="settings-label"><label for="fetch-from-date">SMS 載入起始日期</label></div>
     <div class="settings-date"><input id="fetch-from-date" type="date"><button id="apply-from-date" class="small-button" type="button">載入</button></div>

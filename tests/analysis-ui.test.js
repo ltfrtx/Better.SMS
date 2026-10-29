@@ -6,7 +6,7 @@ const { JSDOM } = require('jsdom');
 const root = path.join(__dirname, '..');
 function app() {
     const dom = new JSDOM('<!doctype html><div id="analysis"></div>', { runScripts: 'outside-only' });
-    for (const file of ['analysis-utils.js', 'analysis-ui.js']) dom.window.eval(fs.readFileSync(path.join(root, file), 'utf8'));
+    for (const file of ['date-utils.js', 'analysis-utils.js', 'analysis-ui.js']) dom.window.eval(fs.readFileSync(path.join(root, file), 'utf8'));
     return dom;
 }
 
@@ -64,5 +64,32 @@ test('shows every subject tied for the most time instead of picking only one', (
     assert.match(target.querySelector('.analysis-insight').textContent, /Math/);
     assert.match(target.querySelector('.analysis-insight').textContent, /Physics/);
     assert.match(target.querySelector('.analysis-insight').textContent, /每科/);
+    dom.window.close();
+});
+
+test('groups dates with daily totals and keeps expanded sections and focus when the clock changes', () => {
+    const dom = app(), w = dom.window, target = w.document.querySelector('#analysis');
+    const records = [
+        { subject: 'Math', date: '02/11/2026', time: '30 分鐘', content: 'First' },
+        { subject: 'English', dateISO: '2026-11-02', time: '40 分鐘', content: 'Second' },
+        { subject: 'Physics', dateISO: '2026-11-03', time: '全日', content: 'Third' }
+    ];
+    w.BetterSMSAnalysisUI.render(target, records, { dataAvailable: true, now: new w.Date(2026, 9, 30, 9, 15) });
+    const sections = target.querySelectorAll('.analysis-day');
+    assert.equal(sections.length, 2);
+    assert.match(sections[0].querySelector('summary').textContent, /02\/11\/2026.*2 項.*1 小時 10 分鐘/);
+    assert.match(sections[1].querySelector('summary').textContent, /03\/11\/2026.*1 項.*時間未明.*1 項未估時/);
+    sections[0].open = false; sections[1].open = true;
+    const focusTarget = sections[1].querySelector('summary'); focusTarget.focus();
+    assert.equal(target.querySelector('#analysis-finish-time').textContent, '10:25');
+    w.BetterSMSAnalysisUI.updateClock(target, new w.Date(2026, 9, 30, 9, 16));
+    assert.equal(target.querySelector('#analysis-finish-time').textContent, '10:26');
+    assert.equal(target.querySelectorAll('.analysis-day')[1], sections[1]);
+    assert.equal(sections[0].open, false); assert.equal(sections[1].open, true);
+    assert.equal(w.document.activeElement, focusTarget);
+    // A data-triggered rerender also preserves the user's expansion choices.
+    w.BetterSMSAnalysisUI.render(target, records, { dataAvailable: true, now: new w.Date(2026, 9, 30, 9, 17) });
+    assert.equal(target.querySelectorAll('.analysis-day')[0].open, false);
+    assert.equal(target.querySelectorAll('.analysis-day')[1].open, true);
     dom.window.close();
 });

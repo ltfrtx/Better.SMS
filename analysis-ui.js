@@ -96,9 +96,46 @@
         return list;
     }
 
+    function makeDayGroups(summary, previousOpen) {
+        const days = analysis.groupByDate(summary.rows, summary.start);
+        const list = element('div', 'analysis-day-list');
+        const weekday = ['日', '一', '二', '三', '四', '五', '六'];
+        days.forEach((day, index) => {
+            const section = element('details', 'analysis-day');
+            section.dataset.analysisDate = day.key;
+            section.open = previousOpen.has(day.key) ? previousOpen.get(day.key) : (days.length === 1 || (!previousOpen.size && index === 0));
+            const header = element('summary', 'analysis-day-summary');
+            const dateLabel = day.date ? `${shortDate(day.date)}（週${weekday[day.date.getDay()]}）` : '日期未明';
+            const left = element('span', 'analysis-day-date', dateLabel);
+            const duration = day.knownCount ? analysis.formatDuration(day.minutes) : '時間未明';
+            const unknown = day.unknownCount ? ` · ${day.unknownCount} 項未估時` : '';
+            const right = element('span', 'analysis-day-total', `${day.rows.length} 項 · ${duration}${unknown}`);
+            header.append(left, right);
+            section.append(header, makeTaskList(day.rows));
+            list.appendChild(section);
+        });
+        return { list, count: days.length };
+    }
+
+    // Update the clock without rebuilding the chart or closing any expanded day.
+    function updateClock(container, now = new Date()) {
+        if (!container || !container.__analysisRecords) return;
+        const time = container.querySelector('#analysis-finish-time');
+        const day = container.querySelector('#analysis-finish-date');
+        const note = container.querySelector('#analysis-hero-note');
+        if (!time || !day || !note) return;
+        const summary = analysis.summarize(container.__analysisRecords, now);
+        const usableFinish = summary.finish && !(summary.unknownCount && summary.totalMinutes === 0);
+        time.textContent = usableFinish ? clock(summary.finish) : '--:--';
+        day.textContent = usableFinish ? shortDate(summary.finish) : '時間不足以估算';
+        note.textContent = `從 ${shortDate(summary.start)} ${clock(summary.start)} 開始，假設連續完成所選範圍的功課，不計休息。`;
+    }
+
     function render(container, records, options = {}) {
         if (!container || !analysis) return;
+        const previousOpen = new Map(Array.from(container.querySelectorAll('details.analysis-day')).map(node => [node.dataset.analysisDate, node.open]));
         container.replaceChildren();
+        container.__analysisRecords = null;
         const scope = element('p', 'analysis-scope', `範圍：${options.filterLabel || '全部已載入'} · 只計未完成功課，不含提醒`);
         container.appendChild(scope);
         if (!options.dataAvailable) {
@@ -117,14 +154,18 @@
         hero.appendChild(element('div', 'analysis-hero-label', estimatedLabel));
         // When only zero-minute work is known and other durations are missing,
         // showing "now" as a finish time would be misleading.
-        const usableFinish = summary.finish && !(summary.unknownCount && summary.totalMinutes === 0);
         const timeRow = element('div', 'analysis-hero-time');
-        const time = element('strong', '', usableFinish ? clock(summary.finish) : '--:--');
+        const time = element('strong', '', '--:--');
         time.id = 'analysis-finish-time';
-        const day = element('span', '', usableFinish ? shortDate(summary.finish) : '時間不足以估算');
+        const day = element('span', '', '時間不足以估算');
+        day.id = 'analysis-finish-date';
         timeRow.append(time, day); hero.appendChild(timeRow);
-        hero.appendChild(element('div', 'analysis-hero-note', `從 ${shortDate(summary.start)} ${clock(summary.start)} 開始，假設連續完成，不計休息。`));
+        const note = element('div', 'analysis-hero-note');
+        note.id = 'analysis-hero-note';
+        hero.appendChild(note);
         container.appendChild(hero);
+        container.__analysisRecords = Array.isArray(records) ? records.slice() : [];
+        updateClock(container, options.now || new Date());
 
         const metrics = element('div', 'analysis-metrics');
         const taskMetric = element('div', 'analysis-metric');
@@ -151,9 +192,10 @@
             const duration = analysis.formatDuration(top.minutes);
             container.appendChild(element('p', 'analysis-insight', `需時最多：${ties.join('、')} · ${ties.length > 1 ? '每科 ' : ''}${duration}`));
         }
-        const heading = element('div', 'analysis-list-heading', `未完成功課 · ${summary.rows.length} 項`);
-        container.append(heading, makeTaskList(summary.rows));
+        const dayGroups = makeDayGroups(summary, previousOpen);
+        const heading = element('div', 'analysis-list-heading', `按 SMS 日期分類 · ${dayGroups.count} 日`);
+        container.append(heading, dayGroups.list);
     }
 
-    root.BetterSMSAnalysisUI = { render };
+    root.BetterSMSAnalysisUI = { render, updateClock };
 })(globalThis);

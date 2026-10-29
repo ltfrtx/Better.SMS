@@ -5,12 +5,12 @@
     const DATE = BetterSMSDateUtils;
     const SUBJECT = BetterSMSSubjectFilter;
     const CLIENT = BetterSMSSmsClient;
-    const VERSION = '1.7.0_beta_alpha';
+    const VERSION = '1.8.0';
     const SCHEMA_VERSION = 2;
     const DEFAULT_STATE = {
         dateFilter: 'ALL', customDate: '', fromDate: '',
         student: 'CUSTOM', mathGroup: 'ALL', x1: 'ALL', x2: 'ALL', x3: 'ALL',
-        modules: 'ALL', viewMode: 'tabs', activeTab: 'homework'
+        viewMode: 'tabs', activeTab: 'homework'
     };
     // Retained from the original extension; every student can also use Custom.
     const STUDENTS_DATABASE = [];
@@ -39,7 +39,7 @@
 
     function normalizeState(input) {
         const value = { ...DEFAULT_STATE, ...(input || {}) };
-        if (!['ALL', 'TODAY', 'NEXT_SCHOOL_DAY', 'NEXT_7_DAYS', 'NEXT_WEEK', 'CUSTOM'].includes(value.dateFilter)) value.dateFilter = 'ALL';
+        if (!['ALL', 'TODAY', 'TOMORROW', 'NEXT_SCHOOL_DAY', 'NEXT_7_DAYS', 'NEXT_WEEK', 'CUSTOM'].includes(value.dateFilter)) value.dateFilter = 'ALL';
         if (!DATE.fromDateKey(value.customDate)) value.customDate = '';
         if (value.dateFilter === 'CUSTOM' && !value.customDate) value.dateFilter = 'ALL';
         if (!DATE.fromDateKey(value.fromDate)) value.fromDate = '';
@@ -47,9 +47,12 @@
         for (const block of ['x1', 'x2', 'x3']) {
             if (!Object.prototype.hasOwnProperty.call(SUBJECT.ELECTIVES[block], value[block])) value[block] = 'ALL';
         }
-        if (!['ALL', 'NONE', 'M1', 'M2', 'BOTH'].includes(value.modules)) value.modules = 'ALL';
+        // A previous beta stored modules separately. The selected Math Group
+        // is now the sole source of M1/M2; never carry the old override forward.
+        delete value.modules;
         if (!['tabs', 'stacked'].includes(value.viewMode)) value.viewMode = 'tabs';
-        if (!['homework', 'reminders'].includes(value.activeTab)) value.activeTab = 'homework';
+        if (!['homework', 'reminders', 'analysis'].includes(value.activeTab)) value.activeTab = 'homework';
+        if (value.viewMode === 'stacked' && value.activeTab === 'reminders') value.activeTab = 'homework';
         if (value.student !== 'CUSTOM' && !STUDENTS_DATABASE[Number(value.student)]) value.student = 'CUSTOM';
         return value;
     }
@@ -174,26 +177,29 @@
         const rem = visibleRecords(reminders);
         renderList('hw-list', hw, 'homework');
         renderList('reminder-list', rem, 'reminders');
-        $('tab-homework-count').textContent = String(hw.length);
+        $('tab-homework-count').textContent = state.viewMode === 'stacked' ? `${hw.length}+${rem.length}` : String(hw.length);
         $('tab-reminders-count').textContent = String(rem.length);
         $('homework-section-count').textContent = `${hw.length} 項`;
         $('reminders-section-count').textContent = `${rem.length} 項`;
-        $('total-count').textContent = `${state.viewMode === 'stacked' ? hw.length + rem.length : state.activeTab === 'homework' ? hw.length : rem.length} 項`;
+        const pendingCount = hw.filter(({ item }) => !completed[uniqueId(item, 'homework')]).length;
+        $('total-count').textContent = `${state.activeTab === 'analysis' ? pendingCount : state.viewMode === 'stacked' ? hw.length + rem.length : state.activeTab === 'homework' ? hw.length : rem.length} 項`;
         renderLayout();
         renderAnalysis();
     }
 
     function renderAnalysis() {
-        const panel = $('settings-panel');
-        const tools = $('analysis-tools');
-        if (!panel || panel.hidden || !tools || !tools.open || !globalThis.BetterSMSAnalysisUI) return;
+        if (state.activeTab !== 'analysis' || !globalThis.BetterSMSAnalysisUI) return;
         // Exactly the same date and subject selection as the homework list;
         // reminders and completed homework never enter this calculation.
         const pending = visibleRecords(homework)
             .filter(({ item }) => !completed[uniqueId(item, 'homework')])
             .map(({ item, warning }) => ({ ...item, analysisWarning: warning }));
-        const syncMessage = isFetching ? '正在同步，暫時使用上次成功資料。' :
-            lastSyncError ? '同步未成功，以下使用上次成功資料。' : '';
+        const range = DATE.getFilterRange(state.dateFilter, new Date(), state.customDate);
+        const earlierMissing = cacheUsable && sourceStartDate && range && range.start && DATE.toDateKey(range.start) < sourceStartDate;
+        const syncMessage = earlierMissing
+            ? (isFetching ? '正在載入較早日期；現有快取未涵蓋所選日期。' : '現有快取未涵蓋所選日期，請重新整理。')
+            : isFetching ? '正在同步，暫時使用上次成功資料。' :
+                lastSyncError ? '同步未成功，以下使用上次成功資料。' : '';
         globalThis.BetterSMSAnalysisUI.render($('analysis-content'), pending, {
             dataAvailable: cacheUsable,
             filterLabel: $('date-filter-summary').textContent,
@@ -205,26 +211,49 @@
     function updateAnalysisTimer() {
         if (analysisTimer) clearInterval(analysisTimer);
         analysisTimer = null;
-        if ($('analysis-tools').open && !$('settings-panel').hidden) {
-            renderAnalysis();
-            analysisTimer = setInterval(renderAnalysis, 60000);
+        if (state.activeTab === 'analysis') {
+            let clockDay = todayKey();
+            analysisTimer = setInterval(() => {
+                const currentDay = todayKey();
+                const dayChanged = currentDay !== clockDay;
+                clockDay = currentDay;
+                // A relative date filter changes meaning after midnight. Rerender
+                // only then; ordinary minute updates preserve expanded days/focus.
+                if (dayChanged && !['ALL', 'CUSTOM'].includes(state.dateFilter)) {
+                    renderControls(); renderRecords(); maybeFetchEarlier();
+                } else if (globalThis.BetterSMSAnalysisUI) {
+                    globalThis.BetterSMSAnalysisUI.updateClock($('analysis-content'), new Date());
+                }
+            }, 60000);
         }
     }
 
     function renderLayout() {
-        const tabs = state.viewMode === 'tabs';
-        $('list-tabs').hidden = !tabs;
-        for (const name of ['homework', 'reminders']) {
+        const stacked = state.viewMode === 'stacked';
+        const showAnalysis = state.activeTab === 'analysis';
+        $('homework-tab-label').textContent = stacked ? '功課＋提醒' : '功課';
+        $('tab-homework').setAttribute('aria-controls', stacked ? 'lists-panel' : 'homework-section');
+        $('tab-reminders').hidden = stacked;
+        const listsPanel = $('lists-panel');
+        listsPanel.hidden = showAnalysis;
+        listsPanel.setAttribute('role', stacked ? 'tabpanel' : 'presentation');
+        if (stacked) listsPanel.setAttribute('aria-labelledby', 'tab-homework');
+        else listsPanel.removeAttribute('aria-labelledby');
+        for (const name of ['homework', 'reminders', 'analysis']) {
             const selected = name === state.activeTab;
             const tab = $(`tab-${name}`);
-            const section = $(`${name}-section`);
-            const heading = $(`${name}-heading`);
             tab.setAttribute('aria-selected', String(selected));
             tab.tabIndex = selected ? 0 : -1;
-            section.hidden = tabs && !selected;
-            heading.hidden = tabs;
-            section.setAttribute('role', tabs ? 'tabpanel' : 'region');
-            section.setAttribute('aria-labelledby', tabs ? `tab-${name}` : `${name}-heading`);
+            if (name === 'analysis') {
+                $('analysis-section').hidden = !selected;
+                continue;
+            }
+            const section = $(`${name}-section`);
+            const heading = $(`${name}-heading`);
+            section.hidden = !stacked && !selected;
+            heading.hidden = !stacked;
+            section.setAttribute('role', stacked ? 'region' : 'tabpanel');
+            section.setAttribute('aria-labelledby', stacked ? `${name}-heading` : `tab-${name}`);
         }
         document.querySelectorAll('input[name="view-mode"]').forEach(radio => { radio.checked = radio.value === state.viewMode; });
     }
@@ -237,19 +266,19 @@
         $('profile-x1').value = state.x1;
         $('profile-x2').value = state.x2;
         $('profile-x3').value = state.x3;
-        $('profile-modules').value = state.modules;
         document.querySelectorAll('.date-btn').forEach(button => {
             const active = button.dataset.dateFilter === state.dateFilter;
             button.classList.toggle('active', active);
             button.setAttribute('aria-pressed', String(active));
         });
         const dateLabels = {
-            ALL: '全部已載入', TODAY: '今天', NEXT_SCHOOL_DAY: '下個上學天',
+            ALL: '全部已載入', TODAY: '今天', TOMORROW: '明天', NEXT_SCHOOL_DAY: '下個上學天',
             NEXT_7_DAYS: '未來 7 天', NEXT_WEEK: '下星期'
         };
         $('date-filter-summary').textContent = state.dateFilter === 'CUSTOM'
             ? `指定：${state.customDate}` : dateLabels[state.dateFilter] || dateLabels.ALL;
         $('custom-date').value = state.customDate;
+        $('analysis-custom-date').value = state.customDate;
         $('fetch-from-date').value = state.fromDate || todayKey();
         renderLayout();
     }
@@ -360,7 +389,7 @@
         const controller = requestController;
         const from = requestedFromDate();
         requestFromDate = from;
-        isFetching = true; uiMessage = ''; renderStatus();
+        isFetching = true; uiMessage = ''; renderStatus(); renderAnalysis();
         let directError = null;
         let source = 'extension';
         try {
@@ -419,7 +448,7 @@
     }
 
     function chooseTab(name, focus = false) {
-        state.activeTab = name; saveState(); renderRecords();
+        state.activeTab = name; saveState(); renderRecords(); updateAnalysisTimer();
         if (focus) $(`tab-${name}`).focus();
     }
     function bindEvents() {
@@ -432,7 +461,7 @@
             }
             saveState(); renderControls(); renderRecords();
         });
-        const profileFields = { 'profile-math': 'mathGroup', 'profile-x1': 'x1', 'profile-x2': 'x2', 'profile-x3': 'x3', 'profile-modules': 'modules' };
+        const profileFields = { 'profile-math': 'mathGroup', 'profile-x1': 'x1', 'profile-x2': 'x2', 'profile-x3': 'x3' };
         Object.entries(profileFields).forEach(([id, key]) => $(id).addEventListener('change', event => {
             state[key] = event.target.value; state.student = 'CUSTOM';
             saveState(); renderControls(); renderRecords();
@@ -441,12 +470,14 @@
             state.dateFilter = button.dataset.dateFilter; uiMessage = '';
             saveState(); renderControls(); renderRecords(); renderStatus(); maybeFetchEarlier();
         }));
-        $('apply-custom-date').addEventListener('click', () => {
-            const selected = $('custom-date').value;
-            if (!DATE.fromDateKey(selected)) { uiMessage = '請先選擇有效的指定日期。'; renderStatus(); return; }
+        function applyCustomDate(inputId) {
+            const selected = $(inputId).value;
+            if (!DATE.fromDateKey(selected)) { uiMessage = '請先選擇有效的指定日期。'; renderStatus(); $(inputId).focus(); return; }
             state.customDate = selected; state.dateFilter = 'CUSTOM'; uiMessage = '';
             saveState(); renderControls(); renderRecords(); renderStatus(); maybeFetchEarlier();
-        });
+        }
+        $('apply-custom-date').addEventListener('click', () => applyCustomDate('custom-date'));
+        $('analysis-apply-custom-date').addEventListener('click', () => applyCustomDate('analysis-custom-date'));
         $('refresh').addEventListener('click', () => { void syncRecords(); });
         $('dev-refresh').addEventListener('click', () => { $('dev-message').textContent = '正在重新抓取…'; void syncRecords(); });
         $('dev-mode-toggle').addEventListener('change', event => {
@@ -459,33 +490,35 @@
                 $('dev-message').textContent = '診斷資料已複製（不含功課或提醒內容）。';
             } catch (_error) { $('dev-message').textContent = '複製失敗，請手動選取診斷資料。'; }
         });
-        for (const name of ['homework', 'reminders']) {
+        for (const name of ['homework', 'reminders', 'analysis']) {
             $(`tab-${name}`).addEventListener('click', () => chooseTab(name));
             $(`tab-${name}`).addEventListener('keydown', event => {
-                if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) {
-                    event.preventDefault();
-                    const target = event.key === 'Home' ? 'homework' : event.key === 'End' ? 'reminders' : name === 'homework' ? 'reminders' : 'homework';
-                    chooseTab(target, true);
-                }
+                if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+                event.preventDefault();
+                const names = state.viewMode === 'stacked' ? ['homework', 'analysis'] : ['homework', 'reminders', 'analysis'];
+                const index = names.indexOf(name);
+                const target = event.key === 'Home' ? names[0] : event.key === 'End' ? names[names.length - 1] :
+                    names[(index + (event.key === 'ArrowRight' ? 1 : -1) + names.length) % names.length];
+                chooseTab(target, true);
             });
         }
         document.querySelectorAll('input[name="view-mode"]').forEach(radio => radio.addEventListener('change', () => {
             if (!radio.checked) return;
-            state.viewMode = radio.value; saveState(); renderRecords();
+            state.viewMode = radio.value;
+            if (state.viewMode === 'stacked' && state.activeTab === 'reminders') state.activeTab = 'homework';
+            saveState(); renderRecords(); updateAnalysisTimer();
         }));
         const showSettings = open => {
             $('settings-panel').hidden = !open;
             $('settings-button').setAttribute('aria-expanded', String(open));
-            updateAnalysisTimer();
             if (open) $('settings-close').focus(); else $('settings-button').focus();
         };
-        $('analysis-tools').addEventListener('toggle', updateAnalysisTimer);
         $('settings-button').addEventListener('click', () => showSettings($('settings-panel').hidden));
         $('settings-close').addEventListener('click', () => showSettings(false));
         document.addEventListener('keydown', event => { if (event.key === 'Escape' && !$('settings-panel').hidden) showSettings(false); });
         document.addEventListener('click', event => {
             if (!$('settings-panel').hidden && !$('settings-panel').contains(event.target) && !$('settings-button').contains(event.target)) {
-                $('settings-panel').hidden = true; $('settings-button').setAttribute('aria-expanded', 'false'); updateAnalysisTimer();
+                $('settings-panel').hidden = true; $('settings-button').setAttribute('aria-expanded', 'false');
             }
         });
         $('apply-from-date').addEventListener('click', () => {
@@ -525,6 +558,9 @@
         try {
             const values = await storageGet(['savedState', 'homeworkList', 'reminderList', 'recordsSchemaVersion', 'completedHomeworkMap', 'sourceStartDate', 'lastUpdated', 'isSynced', 'lastSyncError', 'syncDiagnostics', 'developerMode']);
             applyStored(values, true);
+            // Persist migration once; Math Group, checkboxes and other preferences remain intact.
+            if (values.savedState && Object.prototype.hasOwnProperty.call(values.savedState, 'modules')) saveState();
+            updateAnalysisTimer();
             expandForCurrentFilter();
             void syncRecords();
         } catch (error) {

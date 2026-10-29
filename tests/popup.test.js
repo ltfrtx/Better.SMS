@@ -25,6 +25,19 @@ function makePopup(options = {}) {
     virtualConsole.on('jsdomError', e => errors.push(e));
     const dom = new JSDOM(popupHTML, { url: 'https://extension.test/popup.html', runScripts: 'outside-only', virtualConsole });
     const { window } = dom;
+    if (options.now) {
+        const OriginalDate = window.Date;
+        window.__fakeNow = new OriginalDate(options.now).getTime();
+        window.Date = class FrozenDate extends OriginalDate {
+            constructor(...args) { super(...(args.length ? args : [window.__fakeNow])); }
+            static now() { return window.__fakeNow; }
+        };
+    }
+    const intervals = [];
+    if (options.captureIntervals) {
+        window.setInterval = (fn, milliseconds) => { intervals.push({ fn, milliseconds }); return intervals.length; };
+        window.clearInterval = () => {};
+    }
     const store = clone(options.store || {});
     const changeListeners = [];
     const requests = [];
@@ -76,7 +89,7 @@ function makePopup(options = {}) {
         };
     };
     for (const script of scripts) window.eval(fs.readFileSync(path.join(root, script), 'utf8'));
-    return { dom, window, doc: window.document, store, requests, errors };
+    return { dom, window, doc: window.document, store, requests, errors, intervals };
 }
 async function waitFor(condition, timeout = 3000) {
     const start = Date.now();
@@ -110,7 +123,10 @@ test('popup fetches both sections, applies one profile, persists view preference
     stacked.checked = true; stacked.dispatchEvent(new window.Event('change', { bubbles: true }));
     assert.equal(doc.querySelector('#homework-section').hidden, false);
     assert.equal(doc.querySelector('#reminders-section').hidden, false);
-    assert.equal(doc.querySelector('#list-tabs').hidden, true);
+    assert.equal(doc.querySelector('#list-tabs').hidden, false);
+    assert.equal(doc.querySelector('#tab-reminders').hidden, true);
+    assert.equal(doc.querySelector('#tab-homework').textContent.includes('功課＋提醒'), true);
+    assert.equal(doc.querySelector('#lists-panel').getAttribute('role'), 'tabpanel');
     await waitFor(() => store.savedState.viewMode === 'stacked');
     const checkbox = doc.querySelector('#hw-list .hw-checkbox');
     checkbox.click();
@@ -270,19 +286,20 @@ test('Beta donut uses only filtered incomplete homework and updates after comple
     t.after(() => app.dom.window.close());
     const { doc } = app;
     await waitFor(() => doc.querySelector('#sync-status').classList.contains('synced'));
-    assert.equal(doc.querySelector('#settings-panel').contains(doc.querySelector('#analysis-tools')), true);
-    assert.match(doc.querySelector('#analysis-tools summary').textContent, /測試版/);
-    doc.querySelector('#settings-button').click();
-    doc.querySelector('#analysis-tools summary').click();
+    assert.equal(doc.querySelector('#settings-panel').contains(doc.querySelector('#analysis-content')), false);
+    assert.match(doc.querySelector('#analysis-section .analysis-title').textContent, /測試版/);
+    assert.equal(doc.querySelector('#analysis-section').hidden, true);
+    doc.querySelector('#tab-analysis').click();
+    assert.equal(doc.querySelector('#analysis-section').hidden, false);
     await waitFor(() => doc.querySelector('#analysis-total'));
     assert.equal(doc.querySelector('#analysis-total').textContent, '1 小時 10 分鐘');
     assert.equal(doc.querySelectorAll('#analysis-content .analysis-task').length, 3);
     assert.equal(doc.querySelectorAll('#analysis-content .analysis-arc').length, 3);
     assert.doesNotMatch(doc.querySelector('#analysis-content').textContent, /fictional physics reminder/);
     assert.match(doc.querySelector('#analysis-content').textContent, /不計休息/);
-    doc.querySelector('#settings-close').click();
+    doc.querySelector('#tab-homework').click();
     doc.querySelector('#hw-list .hw-checkbox').click(); // 10 minute Chinese task
-    doc.querySelector('#settings-button').click();
+    doc.querySelector('#tab-analysis').click();
     await waitFor(() => doc.querySelector('#analysis-total') && doc.querySelector('#analysis-total').textContent === '1 小時');
     assert.equal(doc.querySelectorAll('#analysis-content .analysis-task').length, 2);
 });
@@ -294,8 +311,7 @@ test('Beta marks missing durations and never represents the known subtotal as a 
     t.after(() => app.dom.window.close());
     const { doc } = app;
     await waitFor(() => doc.querySelector('#sync-status').classList.contains('synced'));
-    doc.querySelector('#settings-button').click();
-    doc.querySelector('#analysis-tools summary').click();
+    doc.querySelector('#tab-analysis').click();
     await waitFor(() => doc.querySelector('#analysis-total'));
     assert.equal(doc.querySelector('#analysis-total').textContent, '1 小時 10 分鐘');
     assert.equal(doc.querySelectorAll('#analysis-content .analysis-task').length, 4);
@@ -314,8 +330,7 @@ test('Beta analysis respects the selected date and never counts reminder entries
     doc.querySelector('#custom-date').value = '2026-11-03';
     doc.querySelector('#apply-custom-date').click();
     await waitFor(() => doc.querySelector('#date-filter-summary').textContent === '指定：2026-11-03');
-    doc.querySelector('#settings-button').click();
-    doc.querySelector('#analysis-tools summary').click();
+    doc.querySelector('#tab-analysis').click();
     await waitFor(() => doc.querySelector('#analysis-total'));
     assert.equal(doc.querySelector('#analysis-total').textContent, '20 分鐘');
     assert.equal(doc.querySelectorAll('#analysis-content .analysis-task').length, 1);
@@ -329,13 +344,11 @@ test('Beta excludes the other Physics class from analysis and surfaces conflicts
     t.after(() => app.dom.window.close());
     const { doc } = app;
     await waitFor(() => doc.querySelector('#sync-status').classList.contains('synced'));
-    doc.querySelector('#settings-button').click(); doc.querySelector('#analysis-tools summary').click();
+    doc.querySelector('#tab-analysis').click();
     await waitFor(() => doc.querySelector('#analysis-total'));
     assert.equal(doc.querySelector('#analysis-total').textContent, '1 小時 10 分鐘');
     assert.doesNotMatch(doc.querySelector('#analysis-content').textContent, /FHM conflict task/);
-    doc.querySelector('#settings-close').click();
     change(app.window, doc.querySelector('#profile-x3'), 'PHY');
-    doc.querySelector('#settings-button').click();
     await waitFor(() => doc.querySelector('#analysis-total')?.textContent === '4 小時 10 分鐘');
     assert.match(doc.querySelector('#analysis-content').textContent, /FHM conflict task/);
     assert.match(doc.querySelector('#analysis-content').textContent, /依老師歸入 X3/);
@@ -352,8 +365,157 @@ test('Beta warns if analysis is based on an old cache after a sync error', async
     t.after(() => app.dom.window.close());
     const { doc } = app;
     await waitFor(() => doc.querySelector('#sync-status').classList.contains('error'));
-    doc.querySelector('#settings-button').click(); doc.querySelector('#analysis-tools summary').click();
+    doc.querySelector('#tab-analysis').click();
     await waitFor(() => doc.querySelector('#analysis-total'));
     assert.match(doc.querySelector('#analysis-content').textContent, /使用上次成功資料/);
     assert.equal(doc.querySelector('#analysis-total').textContent, '1 小時 10 分鐘');
+});
+
+test('migrates a legacy module setting and applies the Math Group to homework and reminders', async t => {
+    const extraHw = '<tr><td>03/11/2026</td><td>10</td><td>Mathematics</td><td>M2 homework example</td><td>20 分鐘</td><td>SYT</td></tr>';
+    const m1Rem = '<tr><td>03/11/2026</td><td>11</td><td>Mathematics</td><td>M1 reminder example</td><td>0 分鐘</td><td>CPC</td></tr>';
+    const m2Rem = '<tr><td>03/11/2026</td><td>12</td><td>Mathematics</td><td>M2 reminder example</td><td>0 分鐘</td><td>SYT</td></tr>';
+    let html = fixture.replace('</tbody>', `${extraHw}</tbody>`);
+    const last = html.lastIndexOf('</tbody>');
+    html = html.slice(0, last) + m1Rem + m2Rem + html.slice(last);
+    const app = makePopup({ html, store: { savedState: { ...sampleProfile, mathGroup: 'Gp1', modules: 'NONE' } } });
+    t.after(() => app.dom.window.close());
+    const { doc, window, store } = app;
+    await waitFor(() => doc.querySelector('#sync-status').classList.contains('synced'));
+    await waitFor(() => !Object.hasOwn(store.savedState, 'modules'));
+    assert.equal(doc.querySelector('#profile-modules'), null);
+    assert.match(doc.querySelector('#profile-math').selectedOptions[0].textContent, /M1/);
+    assert.match(doc.querySelector('#hw-list').textContent, /M1: fictional module exercise/);
+    assert.doesNotMatch(doc.querySelector('#hw-list').textContent, /M2 homework example/);
+    assert.match(doc.querySelector('#reminder-list').textContent, /M1 reminder example/);
+    assert.doesNotMatch(doc.querySelector('#reminder-list').textContent, /M2 reminder example/);
+    change(window, doc.querySelector('#profile-math'), 'Gp2');
+    assert.doesNotMatch(doc.querySelector('#hw-list').textContent, /M1: fictional module exercise/);
+    assert.match(doc.querySelector('#hw-list').textContent, /M2 homework example/);
+    assert.doesNotMatch(doc.querySelector('#reminder-list').textContent, /M1 reminder example/);
+    assert.match(doc.querySelector('#reminder-list').textContent, /M2 reminder example/);
+    change(window, doc.querySelector('#profile-math'), 'Gp6');
+    assert.doesNotMatch(doc.querySelector('#hw-list').textContent, /M1: fictional module|M2 homework example/);
+    assert.doesNotMatch(doc.querySelector('#reminder-list').textContent, /M[12] reminder example/);
+    change(window, doc.querySelector('#profile-math'), 'ALL');
+    assert.match(doc.querySelector('#hw-list').textContent, /M1: fictional module exercise/);
+    assert.match(doc.querySelector('#hw-list').textContent, /M2 homework example/);
+    assert.match(doc.querySelector('#reminder-list').textContent, /M1 reminder example/);
+    assert.match(doc.querySelector('#reminder-list').textContent, /M2 reminder example/);
+});
+
+test('analysis totals and synchronised date controls distinguish tomorrow, school day and any date', async t => {
+    const saturday = '<tr><td>31/10/2026</td><td>9</td><td>Mathematics</td><td>Gp6 Saturday task</td><td>15 分鐘</td><td>HWS</td></tr>';
+    const tuesday = '<tr><td>03/11/2026</td><td>10</td><td>Mathematics</td><td>Gp6 Tuesday task</td><td>20 分鐘</td><td>HWS</td></tr>';
+    const app = makePopup({ now: new Date(2026, 9, 30, 12), html: fixture.replace('</tbody>', `${saturday}${tuesday}</tbody>`), store: { savedState: sampleProfile } });
+    t.after(() => app.dom.window.close());
+    const { doc, store, requests } = app;
+    await waitFor(() => doc.querySelector('#sync-status').classList.contains('synced'));
+    doc.querySelector('#tab-analysis').click();
+    assert.equal(doc.querySelector('#analysis-total').textContent, '1 小時 45 分鐘');
+    const daySummary = () => [...doc.querySelectorAll('#analysis-content .analysis-day summary')].map(node => node.textContent);
+    assert.equal(daySummary().length, 3);
+    assert.match(daySummary()[0], /31\/10\/2026.*1 項.*15 分鐘/);
+    assert.match(daySummary()[1], /02\/11\/2026.*3 項.*1 小時 10 分鐘/);
+    assert.match(daySummary()[2], /03\/11\/2026.*1 項.*20 分鐘/);
+    doc.querySelector('#analysis-section [data-date-filter="TOMORROW"]').click();
+    assert.equal(doc.querySelector('#date-filter-summary').textContent, '明天');
+    assert.equal(doc.querySelector('#analysis-total').textContent, '15 分鐘');
+    assert.match(doc.querySelector('#hw-list').textContent, /Saturday task/);
+    assert.doesNotMatch(doc.querySelector('#hw-list').textContent, /Tuesday task/);
+    assert.equal(doc.querySelector('#date-accordion [data-date-filter="TOMORROW"]').getAttribute('aria-pressed'), 'true');
+    doc.querySelector('#analysis-section [data-date-filter="NEXT_SCHOOL_DAY"]').click();
+    assert.equal(doc.querySelector('#date-filter-summary').textContent, '下個上學天');
+    assert.equal(doc.querySelector('#analysis-total').textContent, '1 小時 10 分鐘');
+    assert.match(daySummary()[0], /02\/11\/2026.*3 項/);
+    doc.querySelector('#analysis-custom-date').value = '2026-11-03';
+    doc.querySelector('#analysis-apply-custom-date').click();
+    assert.equal(doc.querySelector('#custom-date').value, '2026-11-03');
+    assert.equal(doc.querySelector('#analysis-total').textContent, '20 分鐘');
+    assert.match(doc.querySelector('#analysis-content').textContent, /Tuesday task/);
+    assert.doesNotMatch(doc.querySelector('#analysis-content').textContent, /fictional joint lesson/);
+    // Going backwards from the original 30 Oct source must trigger a fresh fetch.
+    doc.querySelector('#analysis-custom-date').value = '2026-10-29';
+    doc.querySelector('#analysis-apply-custom-date').click();
+    await waitFor(() => requests.some(r => new URL(r.url).searchParams.get('date') === '2026-10-29'));
+    await waitFor(() => store.sourceStartDate === '2026-10-29');
+    assert.equal(store.savedState.fromDate, '2026-10-29');
+    assert.equal(doc.querySelector('#date-filter-summary').textContent, '指定：2026-10-29');
+});
+
+test('three tabs and stacked mode support keyboard navigation and persist the analysis view', async t => {
+    const app = makePopup({ store: { savedState: sampleProfile } });
+    t.after(() => app.dom.window.close());
+    const { doc, window, store } = app;
+    await waitFor(() => doc.querySelector('#sync-status').classList.contains('synced'));
+    const key = (id, value) => doc.querySelector(id).dispatchEvent(new window.KeyboardEvent('keydown', { key: value, bubbles: true }));
+    key('#tab-homework', 'ArrowRight');
+    assert.equal(doc.activeElement.id, 'tab-reminders');
+    key('#tab-reminders', 'ArrowRight');
+    assert.equal(doc.activeElement.id, 'tab-analysis');
+    assert.equal(doc.querySelector('#analysis-section').hidden, false);
+    key('#tab-analysis', 'Home'); assert.equal(doc.activeElement.id, 'tab-homework');
+    key('#tab-homework', 'End'); assert.equal(doc.activeElement.id, 'tab-analysis');
+    doc.querySelector('#settings-button').click();
+    const stacked = doc.querySelector('input[name="view-mode"][value="stacked"]');
+    stacked.checked = true; stacked.dispatchEvent(new window.Event('change', { bubbles: true }));
+    assert.equal(doc.querySelector('#tab-reminders').hidden, true);
+    assert.equal(doc.querySelector('#analysis-section').hidden, false);
+    assert.equal(doc.querySelector('#lists-panel').hidden, true);
+    doc.querySelector('#settings-close').click();
+    key('#tab-analysis', 'ArrowRight');
+    assert.equal(doc.activeElement.id, 'tab-homework');
+    assert.equal(doc.querySelector('#lists-panel').hidden, false);
+    assert.equal(doc.querySelector('#homework-section').hidden, false);
+    assert.equal(doc.querySelector('#reminders-section').hidden, false);
+    key('#tab-homework', 'ArrowLeft'); assert.equal(doc.activeElement.id, 'tab-analysis');
+    await waitFor(() => store.savedState.viewMode === 'stacked' && store.savedState.activeTab === 'analysis');
+    const reloaded = makePopup({ store });
+    t.after(() => reloaded.dom.window.close());
+    await waitFor(() => reloaded.doc.querySelector('#sync-status').classList.contains('synced'));
+    assert.equal(reloaded.doc.querySelector('#analysis-section').hidden, false);
+    assert.equal(reloaded.doc.querySelector('#tab-reminders').hidden, true);
+});
+
+test('when the selected day is earlier than the failed cache, analysis does not imply it was covered', async t => {
+    const data = snapshot('2026-10-30');
+    const app = makePopup({ now: new Date(2026, 9, 30, 12), redirectToLogin: true, store: {
+        savedState: { ...sampleProfile, fromDate: '2026-10-30' }, recordsSchemaVersion: 2,
+        homeworkList: data.homeworkList, reminderList: data.reminderList,
+        sourceStartDate: '2026-10-30', isSynced: true
+    } });
+    t.after(() => app.dom.window.close());
+    const { doc } = app;
+    await waitFor(() => doc.querySelector('#sync-status').classList.contains('error'));
+    doc.querySelector('#tab-analysis').click();
+    doc.querySelector('#analysis-custom-date').value = '2026-10-29';
+    doc.querySelector('#analysis-apply-custom-date').click();
+    await waitFor(() => doc.querySelector('#sync-status').classList.contains('error'));
+    assert.match(doc.querySelector('#analysis-content').textContent, /現有快取未涵蓋所選日期/);
+    assert.equal(doc.querySelector('#source-date').textContent.includes('2026-10-30'), true);
+});
+
+test('minute clock keeps a day expanded but relative dates roll over at midnight', async t => {
+    const saturday = '<tr><td>31/10/2026</td><td>9</td><td>Mathematics</td><td>Gp6 Saturday task</td><td>15 分鐘</td><td>HWS</td></tr>';
+    const app = makePopup({ now: new Date(2026, 9, 30, 23, 58), captureIntervals: true,
+        html: fixture.replace('</tbody>', `${saturday}</tbody>`), store: { savedState: sampleProfile } });
+    t.after(() => app.dom.window.close());
+    const { doc, window, intervals } = app;
+    await waitFor(() => doc.querySelector('#sync-status').classList.contains('synced'));
+    doc.querySelector('#tab-analysis').click();
+    doc.querySelector('#analysis-section [data-date-filter="TOMORROW"]').click();
+    const day = doc.querySelector('.analysis-day');
+    assert.equal(day.open, true);
+    day.querySelector('summary').focus();
+    const callback = intervals.at(-1);
+    assert.equal(callback.milliseconds, 60000);
+    window.__fakeNow += 60000;
+    callback.fn();
+    assert.equal(doc.querySelector('.analysis-day'), day);
+    assert.equal(doc.activeElement, day.querySelector('summary'));
+    assert.equal(doc.querySelector('#analysis-finish-time').textContent, '00:14');
+    window.__fakeNow += 60000;
+    callback.fn(); // It is now Saturday; "tomorrow" means Sunday, not Saturday.
+    assert.equal(doc.querySelector('.analysis-day'), null);
+    assert.match(doc.querySelector('#analysis-content').textContent, /沒有未完成功課/);
 });

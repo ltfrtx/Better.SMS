@@ -91,6 +91,15 @@
         return { visible, warning };
     }
 
+    // One Math selection controls both the ordinary group and module.
+    // The user confirmed that Gp6, like Gp3–Gp5, takes neither module.
+    function moduleForMathGroup(group) {
+        if (group === 'Gp1') return 'M1';
+        if (group === 'Gp2') return 'M2';
+        if (['Gp3', 'Gp4', 'Gp5', 'Gp6'].includes(group)) return 'NONE';
+        return 'ALL'; // Unconfigured: do not hide any group or module.
+    }
+
     function moduleAllowed(module, choice) {
         if (!['ALL', 'NONE', 'M1', 'M2', 'BOTH'].includes(choice)) choice = 'ALL';
         return choice === 'ALL' || choice === 'BOTH' || choice === `M${module}`;
@@ -100,7 +109,8 @@
         const subject = normalize(record.subject);
         const content = normalize(record.content);
         const teacher = teacherTokens(record.teacher);
-        const modules = moduleNumbers(`${subject} ${content}`);
+        let modules = moduleNumbers(`${subject} ${content}`);
+        const moduleChoice = moduleForMathGroup(profile.mathGroup);
         const looksExtended = /\bEXTENDED\b|延伸/.test(subject);
 
         // CPC and SYT also teach ordinary groups, so a teacher alone does NOT
@@ -111,7 +121,17 @@
             if (!modules.length) return result(true, '延伸單元未能確認，請核對 SMS');
         }
         if (modules.length) {
-            return result(modules.some(number => moduleAllowed(number, profile.modules)));
+            // CPC is M1 and SYT is M2. On a direct contradiction, use the
+            // known teacher as for X groups, and display the conflict.
+            const teacherModules = [];
+            if (teacher.has('CPC')) teacherModules.push('1');
+            if (teacher.has('SYT')) teacherModules.push('2');
+            let warning = '';
+            if (teacherModules.length && !teacherModules.some(number => modules.includes(number))) {
+                modules = teacherModules;
+                warning = `M1／M2 標記與老師不一致；依老師歸入 ${modules.map(number => `M${number}`).join('／')}，請核對 SMS`;
+            }
+            return result(modules.some(number => moduleAllowed(number, moduleChoice)), warning);
         }
 
         const chosen = Object.prototype.hasOwnProperty.call(MATH, profile.mathGroup) ? profile.mathGroup : 'ALL';
@@ -137,8 +157,8 @@
         // extension module, so retain that possibility rather than hide it.
         const hasCpc = teacher.has('CPC') || contentTokens.has('CPC');
         const hasSyt = teacher.has('SYT') || contentTokens.has('SYT');
-        if (!groupsFromText.length && ((hasCpc && moduleAllowed('1', profile.modules)) ||
-            (hasSyt && moduleAllowed('2', profile.modules)))) {
+        if (!groupsFromText.length && ((hasCpc && moduleAllowed('1', moduleChoice)) ||
+            (hasSyt && moduleAllowed('2', moduleChoice)))) {
             return result(true, '可能是 M1／M2，缺少明確組別標記，請核對 SMS');
         }
         return result(false);
@@ -225,7 +245,7 @@
         return filterElective(record, profile);
     }
 
-    const api = { MATH, ELECTIVES, electiveSubject, isCommonSubject, moduleNumbers, mathGroups, electiveBlocks, evaluate };
+    const api = { MATH, ELECTIVES, electiveSubject, isCommonSubject, moduleNumbers, moduleForMathGroup, mathGroups, electiveBlocks, evaluate };
     root.BetterSMSSubjectFilter = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(globalThis);

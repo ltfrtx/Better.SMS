@@ -61,3 +61,20 @@ test('formats hours and minutes without rounding away fractional minutes', () =>
     assert.equal(analysis.formatDuration(1.5), '1.5 分鐘');
     assert.equal(analysis.formatDuration(NaN), '時間未明');
 });
+
+test('daily groups sort by SMS date and keep unknown times and zero separate', () => {
+    const data = [
+        { dateISO: '2026-11-03', subject: 'Math', time: '全日' },
+        { date: '02/11/2026', subject: 'Math', time: '30 分鐘' },
+        { dateISO: '2026-11-02', subject: 'English', time: '40 分鐘' },
+        { dateISO: '2026-11-03', subject: 'Chinese', time: '0 分鐘' },
+        { date: 'invalid', subject: 'STEAM', time: '10 分鐘' }
+    ];
+    const summary = analysis.summarize(data, new Date(2026, 9, 30));
+    const days = analysis.groupByDate(summary.rows, summary.start);
+    assert.deepEqual(days.map(day => day.key), ['2026-11-02', '2026-11-03', 'unknown']);
+    assert.deepEqual(days.map(day => day.rows.length), [2, 2, 1]);
+    assert.deepEqual(days.map(day => day.minutes), [70, 0, 10]);
+    assert.deepEqual(days.map(day => day.unknownCount), [0, 1, 0]);
+    assert.equal(days[1].knownCount, 1); // zero is known, not missing
+});

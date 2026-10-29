@@ -177,6 +177,8 @@
         let start = new Date(today), end;
         if (filter === 'NEXT_SCHOOL_DAY') {
             start = getNextSchoolDay(today);
+        } else if (filter === 'TOMORROW') {
+            start.setDate(start.getDate() + 1); // calendar tomorrow, including weekends
         } else if (filter === 'NEXT_WEEK') {
             const day = today.getDay();
             start.setDate(start.getDate() + (day === 0 ? 1 : 8 - day));

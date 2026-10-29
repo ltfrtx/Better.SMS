@@ -1,9 +1,9 @@
 {
   "manifest_version": 3,
-  "name": "Better.SMS Beta",
-  "short_name": "BetterSMS β",
-  "version": "1.7.0",
-  "description": "Better.SMS Beta：選科篩選與功課時間分析（測試版）。",
+  "name": "Better.SMS",
+  "short_name": "BetterSMS",
+  "version": "1.8.0",
+  "description": "Better.SMS：選科篩選、功課和提醒，以及時間分析（測試版）。",
   "permissions": [
     "activeTab",
     "storage"
@@ -13,7 +13,7 @@
   ],
   "action": {
     "default_popup": "popup.html",
-    "default_title": "Better.SMS Beta — 功課與提醒",
+    "default_title": "Better.SMS — 功課、提醒及時間分析",
     "default_icon": {
       "16": "icon16.png",
       "48": "icon48.png",
@@ -40,5 +40,5 @@
       "run_at": "document_idle"
     }
   ],
-  "version_name": "V1.7.0_beta_alpha"
+  "version_name": "BetterSMS_1.8.0"
 }

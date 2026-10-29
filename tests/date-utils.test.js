@@ -58,3 +58,15 @@ test('seven days includes today and exactly six subsequent calendar dates', () =
     assert.equal(dates.matchesDateFilter(entry('2026-11-02'), 'CUSTOM', now, '2026-11-02'), true);
     assert.equal(dates.matchesDateFilter(entry('2026-11-02'), 'CUSTOM', now, 'not-a-date'), false);
 });
+
+test('tomorrow is the next calendar day even when the next school day skips a weekend', () => {
+    const friday = new Date(2026, 9, 30, 23, 45);
+    const tomorrow = dates.getFilterRange('TOMORROW', friday);
+    assert.equal(dates.toDateKey(tomorrow.start), '2026-10-31');
+    assert.equal(dates.toDateKey(tomorrow.end), '2026-10-31');
+    assert.equal(dates.toDateKey(dates.getFilterRange('NEXT_SCHOOL_DAY', friday).start), '2026-11-02');
+    assert.equal(dates.matchesDateFilter({ dateISO: '2026-10-31' }, 'TOMORROW', friday), true);
+    assert.equal(dates.matchesDateFilter({ dateISO: '2026-11-02' }, 'TOMORROW', friday), false);
+    assert.equal(dates.toDateKey(dates.getFilterRange('TOMORROW', new Date(2026, 11, 31)).start), '2027-01-01');
+    assert.equal(dates.toDateKey(dates.getFilterRange('TOMORROW', new Date(2028, 1, 28)).start), '2028-02-29');
+});
