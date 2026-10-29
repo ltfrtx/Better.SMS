@@ -1,0 +1,38 @@
+{
+  "manifest_version": 3,
+  "name": "Fuck.SMS",
+  "version": "1.2",
+  "description": "v1.2 stable",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage"
+  ],
+  "host_permissions": [
+    "https://sms.twghlkss.edu.hk/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "查看功課",
+    "default_icon": {
+      "16": "icon16.png",
+      "48": "icon48.png",
+      "128": "icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icon16.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://sms.twghlkss.edu.hk/student/*"
+      ],
+      "js": [
+        "content.js"
+      ]
+    }
+  ]
+}
