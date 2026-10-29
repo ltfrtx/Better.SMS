@@ -2,15 +2,9 @@
 
 Chrome／Chromium 擴充功能，從 SMS 學生頁面整理功課，並支援日期及科目篩選。
 
-**版本：** 1.3.*0* Beta<br>
-**支援頁面：** `[https://sms.twghlkss.edu.hk/student/*](https://sms.twghlkss.edu.hk/student/records.php?feature=homework)`
-
-## 最近更新
-
-- 修正中文／英文切換時欄位順序、欄位名稱及日期格式不同而造成的錯誤抓取。現在會優先按中英文表頭辨識日期、科目、功課、老師及時間，並接受常見中英文日期格式。
-- 等待頁面更新完成並再次確認資料穩定後才同步；找不到可辨識表格時不會用空清單蓋掉上一次成功抓取的資料。
-- 同步狀態只會在資料成功寫入擴充功能儲存空間後顯示「已同步」。
-- 加入開發者模式，提供手動重新抓取及可複製的診斷資料。診斷資料不包含功課內容。
+**版本：** 1.9.*0* Beta<br>
+**支援頁面：** 
+`https://sms.twghlkss.edu.hk/student/*](https://sms.twghlkss.edu.hk/student/records.php?feature=homework)`
 
 ## 安裝（載入未封裝擴充功能）
 
