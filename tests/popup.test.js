@@ -248,3 +248,19 @@ test('developer tools are inside the settings dialog and can still be enabled', 
     doc.querySelector('#settings-close').click();
     assert.equal(settings.hidden, true);
 });
+
+test('teacher-priority filtering applies independently to homework and reminders', async t => {
+    const row = '<tr><td>03/11/2026</td><td>9</td><td>Physics</td><td>X1: wrong-label example</td><td>30 分鐘</td><td>FHM</td></tr>';
+    let html = fixture.replace('</tbody>', `${row}</tbody>`);
+    const last = html.lastIndexOf('</tbody>');
+    html = html.slice(0, last) + row + html.slice(last);
+    const app = makePopup({ html, store: { savedState: sampleProfile } });
+    t.after(() => app.dom.window.close());
+    await waitFor(() => app.doc.querySelector('#sync-status').classList.contains('synced'));
+    assert.doesNotMatch(app.doc.querySelector('#hw-list').textContent, /wrong-label example/);
+    assert.doesNotMatch(app.doc.querySelector('#reminder-list').textContent, /wrong-label example/);
+    change(app.window, app.doc.querySelector('#profile-x3'), 'PHY');
+    assert.match(app.doc.querySelector('#hw-list').textContent, /wrong-label example/);
+    assert.match(app.doc.querySelector('#hw-list').textContent, /依老師歸入 X3/);
+    assert.match(app.doc.querySelector('#reminder-list').textContent, /wrong-label example/);
+});

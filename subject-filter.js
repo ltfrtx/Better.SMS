@@ -150,66 +150,68 @@
         const tokens = teacherTokens(record.teacher);
         const teacherPairs = ALL_ELECTIVES.filter(entry => tokens.has(entry.teacher));
         const matchingTeacherPairs = code ? teacherPairs.filter(entry => entry.code === code) : [];
-        const candidates = [];
-        let unresolved = false;
-        let warning = '';
-        const add = pair => {
-            if (pair && !candidates.some(candidate => candidate.block === pair.block && candidate.code === pair.code)) {
-                candidates.push(pair);
-            }
-        };
 
-        if (blocks.length) {
-            blocks.forEach(block => {
-                // Prefer the actual subject; a teacher may teach different subjects
-                // in different blocks (e.g. ATH in X1 and X3).
-                const bySubject = code && ALL_ELECTIVES.find(entry => entry.block === block && entry.code === code);
-                if (bySubject) add(bySubject);
-                else if (!code) {
-                    const matches = teacherPairs.filter(entry => entry.block === block);
-                    if (matches.length === 1) add(matches[0]);
-                    else unresolved = true;
-                } else {
-                    unresolved = true;
-                }
-            });
-            if (matchingTeacherPairs.length) {
-                if (matchingTeacherPairs.some(pair => !blocks.includes(pair.block))) {
-                    warning = 'X 組別與老師不一致，請核對 SMS';
-                    matchingTeacherPairs.forEach(add);
-                }
-            } else if (teacherPairs.length && code) {
-                warning = '科目與老師不一致，請核對 SMS';
-                teacherPairs.forEach(add);
-            } else if (!code && teacherPairs.some(pair => !blocks.includes(pair.block))) {
-                warning = 'X 組別與老師不一致，請核對 SMS';
-                teacherPairs.forEach(add);
-            }
-        } else if (code) {
-            if (matchingTeacherPairs.length) {
-                matchingTeacherPairs.forEach(add);
-            } else if (teacherPairs.length) {
-                ALL_ELECTIVES.filter(entry => entry.code === code).forEach(add);
-                teacherPairs.forEach(add);
-                warning = '科目與老師不一致，請核對 SMS';
-            } else {
-                ALL_ELECTIVES.filter(entry => entry.code === code).forEach(add);
-                warning = 'X 組別未能確認，請核對 SMS';
-            }
-        } else {
-            // General subjects such as Other/CSD must not be hidden just because
-            // their teacher also teaches an elective.
-            return result(true, '未列於選科表，請核對是否適用');
-        }
-
-        if (unresolved || !candidates.length) {
-            return result(true, warning || '科目或 X 組別未能確認，請核對 SMS');
-        }
-        const visible = candidates.some(pair => {
+        const allowed = pair => {
             const choice = profile[pair.block];
             return !choice || choice === 'ALL' || !ELECTIVES[pair.block][choice] || choice === pair.code;
-        });
-        return result(visible, warning);
+        };
+        const showCandidates = (pairs, warning = '') => result(pairs.some(allowed), warning);
+
+        // General subjects such as Other/CSD must not be hidden just because
+        // their teacher also teaches an elective. An explicit X label can make
+        // an otherwise unknown subject an elective, but without one it stays.
+        if (!code && !blocks.length) return result(true, '未列於選科表，請核對是否適用');
+
+        // User-selected rule: for a recognised subject/teacher combination,
+        // the timetable teacher decides the X block, even if the description
+        // says something different. ATH teaches JAP in X1 and HIST in X3, so
+        // matching the subject as well as the teacher is essential.
+        if (matchingTeacherPairs.length) {
+            let warning = '';
+            const agrees = !blocks.length || matchingTeacherPairs.some(pair => blocks.includes(pair.block));
+            if (!agrees) {
+                const assigned = [...new Set(matchingTeacherPairs.map(pair => pair.block.toUpperCase()))].join('／');
+                warning = `X 組標記與老師不一致；依老師歸入 ${assigned}，請核對 SMS`;
+            } else if (matchingTeacherPairs.length > 1) {
+                warning = '有多個老師或組別，請核對 SMS';
+            }
+            return showCandidates(matchingTeacherPairs, warning);
+        }
+
+        if (code && teacherPairs.length) {
+            // A recognised teacher assigned to a DIFFERENT subject (not just
+            // a different X) is not enough to identify the real lesson. Keep
+            // it visible rather than silently invent a subject assignment.
+            return result(true, '科目與老師不一致，無法確認組別，請核對 SMS');
+        }
+
+        if (!code && teacherPairs.length) {
+            // An unknown subject with an explicit X can still be identified by
+            // a unique teacher. If one teacher maps to multiple subjects,
+            // the X label helps only when it selects a unique candidate.
+            const matchingBlocks = teacherPairs.filter(pair => blocks.includes(pair.block));
+            const candidates = teacherPairs.length === 1 ? teacherPairs : matchingBlocks.length === 1 ? matchingBlocks : teacherPairs;
+            const mismatch = !candidates.some(pair => blocks.includes(pair.block));
+            const warning = mismatch ? 'X 組標記與老師不一致；以老師為準，請核對 SMS' :
+                candidates.length > 1 ? '老師對應多個組別，請核對 SMS' : '科目名稱未能確認，請核對 SMS';
+            return showCandidates(candidates, warning);
+        }
+
+        // If the teacher is unavailable or not in the timetable, fall back to
+        // an explicit X marker, then to every possible block for the subject.
+        if (blocks.length) {
+            const candidates = [];
+            let unresolved = false;
+            blocks.forEach(block => {
+                const pair = code && ALL_ELECTIVES.find(entry => entry.block === block && entry.code === code);
+                if (pair) candidates.push(pair); else unresolved = true;
+            });
+            if (unresolved || !candidates.length) return result(true, '科目或 X 組別未能確認，請核對 SMS');
+            return showCandidates(candidates, '未能以老師確認，已按 X 標記分類');
+        }
+        const candidates = ALL_ELECTIVES.filter(entry => entry.code === code);
+        if (!candidates.length) return result(true, '科目或 X 組別未能確認，請核對 SMS');
+        return showCandidates(candidates, 'X 組別未能確認，請核對 SMS');
     }
 
     function evaluate(record, profile = {}) {

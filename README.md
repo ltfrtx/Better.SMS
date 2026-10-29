@@ -1,4 +1,4 @@
-# Better.SMS v1.6.1
+# Better.SMS v1.6.2
 
 > 下載 Release 的 Source code (zip) 解壓後，選擇包含 `manifest.json` 的資料夾以載入擴充功能。此發行版本不包含具名學生預設。
 
@@ -7,7 +7,7 @@ Chrome／Chromium 擴充功能，從 [SMS 功課頁](https://sms.twghlkss.edu.hk
 
 ## 安裝
 
-1. 解壓縮 `BetterSMS_v1.6.1.zip`。在 Chrome 開啟 `chrome://extensions`。
+1. 解壓縮 `BetterSMS_v1.6.2.zip`。在 Chrome 開啟 `chrome://extensions`。
 2. 開啟右上角「開發人員模式」，選擇「載入未封裝項目」。
 3. 選擇解壓後的 **BetterSMS** 資料夾（內含 `manifest.json`）。
 4. 開啟 [SMS 功課頁](https://sms.twghlkss.edu.hk/student/records.php?feature=homework)，登入學生帳戶，安裝後重新載入一次該頁。
@@ -35,7 +35,9 @@ Chrome／Chromium 擴充功能，從 [SMS 功課頁](https://sms.twghlkss.edu.hk
 
 ## 篩選時需要留意
 
-程式根據提供的選科表、科目名稱、老師代號及內容中的 `X1`／`X2`／`X3`、`Gp1`–`Gp6`、`M1`／`M2` 等標記判斷。若資料含糊或互相矛盾，會盡量保留可能屬於你的項目並顯示「請核對 SMS」，而不是靜默隱藏；最終仍以學校 SMS 的內容為準。
+X 組以提供的**科目＋老師代號對照表優先**。同名科目（例如 X1 的 LWY 物理與 X3 的 FHM 物理）不會互相混入。若內容寫 `X1` 但物理老師是 FHM，會按老師歸入 X3，並向看到該項目的同學顯示矛盾提示。若老師不在表內，才用 X 標記及科目輔助；科目與老師無法對上時會保留並提示核對。
+
+這是使用你提供的老師表所作的判斷；如果學校更換老師、派代課老師，或一份功課實際適用多組，可能需要在 SMS 再確認。Math Group 和 M1／M2 仍結合組別、內容和老師判斷；最終以 SMS 為準。
 
 例如 CPC 同時是 Gp1／M1 老師、SYT 同時是 Gp2／M2 老師。如果一筆數學記錄沒有明確標示組別，而選科顯示它可能屬於你的 M1／M2，會保留並提示核對。學校更換老師、科目名稱或表格格式後，相關設定可能需要更新。
 

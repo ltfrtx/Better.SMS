@@ -5,7 +5,7 @@
     const DATE = BetterSMSDateUtils;
     const SUBJECT = BetterSMSSubjectFilter;
     const CLIENT = BetterSMSSmsClient;
-    const VERSION = '1.6.1';
+    const VERSION = '1.6.2';
     const SCHEMA_VERSION = 2;
     const DEFAULT_STATE = {
         dateFilter: 'ALL', customDate: '', fromDate: '',

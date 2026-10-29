@@ -75,14 +75,57 @@ test('M1 and M2 are independent from normal groups, and default to showing all',
     assert.equal(visible(item('Other', 'SYT', '*M2: module work'), { ...profile, modules: 'M2' }), true);
 });
 
-test('explicit X labels can contain punctuation and inconsistent teacher/block data is kept for either possible owner', () => {
+test('teacher wins when a same-subject X label conflicts with the timetable', () => {
     const conflict = item('Physics', 'FHM', '*X1: assignment');
     const forX1 = filter.evaluate(conflict, profile);
-    assert.equal(forX1.visible, true); assert.match(forX1.warning, /不一致/);
-    assert.equal(visible(conflict, { ...profile, x1: 'HIST', x3: 'PHY' }), true);
+    assert.equal(forX1.visible, false); // X1 Physics alone is not enough.
+    const forX3 = filter.evaluate(conflict, { ...profile, x1: 'HIST', x3: 'PHY' });
+    assert.equal(forX3.visible, true);
+    assert.match(forX3.warning, /依老師歸入 X3/);
     assert.equal(visible(conflict, { ...profile, x1: 'HIST', x3: 'ICT' }), false);
+    assert.equal(visible(item('Physics', 'LWY', 'X3: assignment'), { ...profile, x1: 'PHY', x3: 'ICT' }), true);
+    assert.equal(visible(item('Physics', 'LWY', 'X3: assignment'), { ...profile, x1: 'ECON', x3: 'PHY' }), false);
     assert.deepEqual(filter.electiveBlocks('*X1/X2: check'), ['x1', 'x2']);
     assert.deepEqual(filter.electiveBlocks('exercise EX1 and 2'), []);
+});
+
+test('same-named subjects are filtered by the correct block and teacher', () => {
+    const cases = [
+        ['Physics', 'LWY', 'x1', 'PHY', 'x3', 'PHY'],
+        ['Physics', 'FHM', 'x3', 'PHY', 'x1', 'PHY'],
+        ['Chemistry', 'LCO', 'x1', 'CHEM', 'x2', 'CHEM'],
+        ['Chemistry', 'PTW', 'x2', 'CHEM', 'x1', 'CHEM'],
+        ['Biology', 'YSL', 'x2', 'BIO', 'x3', 'BIO'],
+        ['Biology', 'NWK', 'x3', 'BIO', 'x2', 'BIO'],
+        ['Economics', 'TYN', 'x1', 'ECON', 'x3', 'ECON'],
+        ['Economics', 'LYK', 'x3', 'ECON', 'x1', 'ECON'],
+        ['Chinese History', 'HKC', 'x1', 'CHIS', 'x2', 'CHIS'],
+        ['Chinese History', 'WCL', 'x2', 'CHIS', 'x1', 'CHIS']
+    ];
+    for (const [subject, teacher, rightBlock, rightCode, otherBlock, otherCode] of cases) {
+        const selections = { x1: 'HIST', x2: 'VA', x3: 'ICT', mathGroup: 'Gp6', modules: 'NONE' };
+        selections[rightBlock] = rightCode;
+        assert.equal(visible(item(subject, teacher), selections), true, `${subject} ${teacher} correctly selected`);
+        selections[rightBlock] = rightBlock === 'x2' ? 'VA' : 'HIST';
+        selections[otherBlock] = otherCode;
+        assert.equal(visible(item(subject, teacher), selections), false, `${subject} ${teacher} must not leak into ${otherBlock}`);
+    }
+});
+
+test('subject disambiguates the teacher ATH in X1 Japanese versus X3 History', () => {
+    const p = { ...profile, x1: 'JAP', x3: 'ICT' };
+    assert.equal(visible(item('Japanese', 'ATH', 'X3 homework'), p), true);
+    assert.equal(visible(item('History', 'ATH', 'X1 homework'), p), false);
+    assert.equal(visible(item('History', 'ATH', 'X1 homework'), { ...p, x1: 'PHY', x3: 'HIST' }), true);
+});
+
+test('when the teacher cannot be reconciled with the subject, keep and warn rather than silently hide it', () => {
+    const unexpected = filter.evaluate(item('Physics', 'TYN', 'X1'), profile);
+    assert.equal(unexpected.visible, true);
+    assert.match(unexpected.warning, /無法確認/);
+    const unknownTeacher = filter.evaluate(item('Physics', 'unknown', '*X3 test'), { ...profile, x3: 'PHY' });
+    assert.equal(unknownTeacher.visible, true);
+    assert.match(unknownTeacher.warning, /X 標記/);
 });
 
 test('when a subject could be in more than one block but teacher is missing, do not hide a possible match', () => {
