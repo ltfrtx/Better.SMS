@@ -1,6 +1,7 @@
 # Better.SMS
 
 Chrome／Chromium 擴充功能，從 SMS 學生頁面整理功課，並支援日期及科目篩選。
+GPL-3.0 license
 
 **版本：** 1.9.*0* Release<br>
 **支援頁面：** 
