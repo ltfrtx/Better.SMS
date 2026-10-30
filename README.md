@@ -79,12 +79,13 @@ npm run check
 
 ## 📄 授權
 
+**BetterSMS 使用 GPL-3.0 license授權。**
 專案主分支的授權資料請參閱 [LICENSE](https://github.com/ltfrtx/Better.SMS/blob/main/LICENSE)；使用特定發行版本時，亦請參閱該版本附帶的授權檔案。
 
 ---
 
 <div align="center">
 
-為更好的 SMS 體驗而製作 💙
+I Love Yau Sir.
 
 </div>
