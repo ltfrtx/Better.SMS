@@ -1,0 +1,44 @@
+{
+  "manifest_version": 3,
+  "name": "Better.SMS",
+  "short_name": "BetterSMS",
+  "version": "1.9.1",
+  "description": "Better.SMS：選科篩選、功課和提醒，以及時間分析（測試版）。",
+  "permissions": [
+    "activeTab",
+    "storage"
+  ],
+  "host_permissions": [
+    "https://sms.twghlkss.edu.hk/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Better.SMS — 功課、提醒及時間分析",
+    "default_icon": {
+      "16": "icon16.png",
+      "48": "icon48.png",
+      "128": "icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icon16.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://sms.twghlkss.edu.hk/student/*"
+      ],
+      "js": [
+        "date-utils.js",
+        "homework-parser.js",
+        "sms-document.js",
+        "sms-client.js",
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "version_name": "BetterSMS_1.9.1"
+}

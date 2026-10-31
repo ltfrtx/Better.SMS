@@ -1,0 +1,817 @@
+<!DOCTYPE html>
+<html lang="zh-TW" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <title>Better.SMS</title>
+  <style>
+    * { box-sizing: border-box; }
+
+    /* Chrome action popup: 800 × 600 CSS px when space is available.
+       On a smaller viewport, fit the available space rather than clipping horizontally. */
+    html {
+      width: 800px;
+      height: 600px;
+      min-width: 800px;
+      min-height: 600px;
+      overflow: hidden;
+    }
+
+    body {
+      width: min(100%, 100vw);
+      height: min(100%, 100vh);
+      min-height: 0;
+      overflow-y: auto;
+      overflow-x: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+      margin: 0;
+      padding: 14px;
+      background-color: #f8fafc;
+      color: #1e293b;
+    }
+
+    /* The title remains visible while the body is scrolled. */
+    .header {
+      position: sticky;
+      /* Compensate for the negative top margin inside the padded scroll body. */
+      top: -14px;
+      z-index: 4;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin: -14px -14px 8px;
+      padding: 14px 14px 9px;
+      background: #f8fafc;
+      border-bottom: 1px solid #e2e8f0;
+      box-shadow: 0 2px 8px rgba(15, 23, 42, .05);
+    }
+
+    .header-title-group {
+      display: flex;
+      flex-direction: column;
+    }
+
+    h2 {
+      margin: 0;
+      font-size: 18px;
+      color: #0f172a;
+      line-height: 1.2;
+    }
+
+    .author {
+      font-size: 11px;
+      color: #64748b;
+      margin-top: 2px;
+      font-weight: 500;
+    }
+
+    .badge {
+      background-color: #0284c7;
+      color: white;
+      font-size: 12px;
+      padding: 3px 8px;
+      border-radius: 12px;
+      font-weight: bold;
+    }
+
+    /* 新增：同步與更新時間狀態欄 */
+    .status-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 11px;
+      color: #64748b;
+      background: #ffffff;
+      padding: 6px 10px;
+      border-radius: 6px;
+      margin-bottom: 10px;
+      border: 1px solid #e2e8f0;
+    }
+    .sync-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-weight: 600;
+    }
+    .sync-badge.synced { color: #059669; }
+    .sync-badge.syncing { color: #d97706; }
+    .sync-badge.error { color: #dc2626; }
+    .sync-badge.pending { color: #64748b; }
+    .update-time {
+      color: #64748b;
+      text-align: right;
+    }
+
+    .dev-tools {
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 7px;
+      margin-bottom: 10px;
+      overflow: hidden;
+    }
+    .dev-summary {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 7px 10px;
+      color: #475569;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      user-select: none;
+    }
+    .dev-mode-state { color: #64748b; font-weight: 500; }
+    .dev-content {
+      padding: 9px 10px;
+      border-top: 1px solid #e2e8f0;
+      font-size: 11px;
+    }
+    .dev-toggle-row { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+    .dev-toggle-row input { accent-color: #0284c7; }
+    .dev-help { margin: 5px 0 8px; color: #64748b; line-height: 1.45; }
+    .dev-actions { display: flex; gap: 6px; margin-top: 8px; }
+    .dev-actions button {
+      flex: 1;
+      border: 1px solid #cbd5e1;
+      border-radius: 5px;
+      background: #f8fafc;
+      color: #334155;
+      padding: 6px;
+      font-size: 11px;
+      cursor: pointer;
+    }
+    .dev-actions button:hover { background: #e2e8f0; }
+    .dev-diagnostics {
+      max-height: 140px;
+      overflow: auto;
+      padding: 7px;
+      border-radius: 5px;
+      background: #0f172a;
+      color: #cbd5e1;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      font: 10px/1.45 ui-monospace, SFMono-Regular, Consolas, monospace;
+    }
+    .dev-message { display: block; min-height: 14px; margin-top: 5px; color: #0369a1; }
+    #dev-panel[hidden] { display: none; }
+
+    /* 日期篩選按鈕區 */
+    .section-title {
+      font-size: 12px;
+      font-weight: bold;
+      color: #64748b;
+      margin: 8px 0 4px 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .date-filter-group {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 10px;
+    }
+    .date-btn {
+      flex: 1;
+      padding: 6px 4px;
+      font-size: 12px;
+      border: 1px solid #cbd5e1;
+      background: white;
+      color: #334155;
+      border-radius: 6px;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.2s;
+    }
+    .date-btn.active {
+      background: #0284c7;
+      color: white;
+      border-color: #0284c7;
+      font-weight: bold;
+    }
+
+    /* 可收起的個人選科 (Collapsible Accordion) */
+    .profile-box {
+      background: #f1f5f9;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      margin-bottom: 12px;
+      overflow: hidden;
+    }
+    .profile-summary {
+      padding: 8px 12px;
+      font-size: 12px;
+      font-weight: bold;
+      color: #0369a1;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      user-select: none;
+      background: #f1f5f9;
+      transition: background 0.2s;
+    }
+    .profile-summary > div { min-width: 0; overflow-wrap: anywhere; }
+    .profile-summary .chevron-icon { flex: none; margin-left: 8px; }
+    .profile-summary:hover {
+      background: #e2e8f0;
+    }
+    .profile-summary::-webkit-details-marker {
+      display: none;
+    }
+    .profile-tag {
+      font-weight: normal;
+      color: #475569;
+      margin-left: 6px;
+      font-size: 11px;
+    }
+    .chevron-icon {
+      font-size: 10px;
+      transition: transform 0.2s;
+      color: #64748b;
+    }
+    .profile-box[open] .chevron-icon {
+      transform: rotate(180deg);
+    }
+
+    .profile-content {
+      padding: 10px;
+      border-top: 1px solid #e2e8f0;
+      background: #ffffff;
+    }
+    .profile-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      gap: 8px;
+      margin-top: 6px;
+    }
+    .profile-field {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .profile-field label {
+      font-size: 11px;
+      font-weight: 600;
+      color: #475569;
+    }
+    .profile-field select {
+      padding: 5px 6px;
+      font-size: 11px;
+      border-radius: 4px;
+      border: 1px solid #cbd5e1;
+      background: white;
+      outline: none;
+    }
+
+    /* 功課卡片 */
+    .hw-card {
+      background: white;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin-bottom: 8px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+      transition: all 0.2s ease;
+    }
+    .hw-card.completed {
+      background-color: #f1f5f9;
+      border-color: #cbd5e1;
+      opacity: 0.7;
+    }
+    .hw-card.completed .content {
+      text-decoration: line-through;
+      color: #94a3b8;
+    }
+    .hw-card.completed .subject {
+      color: #64748b;
+      text-decoration: line-through;
+    }
+
+    .hw-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+
+    .hw-check-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+    }
+    .hw-checkbox {
+      width: 16px;
+      height: 16px;
+      cursor: pointer;
+      accent-color: #0284c7;
+      margin: 0;
+    }
+
+    .subject {
+      font-weight: bold;
+      color: #0369a1;
+      font-size: 13px;
+    }
+    .date-badge {
+      font-size: 11px;
+      color: #047857;
+      background: #ecfdf5;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 500;
+    }
+    .content {
+      font-size: 12px;
+      line-height: 1.5;
+      color: #334155;
+      white-space: pre-line;
+      margin: 4px 0;
+    }
+    .footer {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      color: #64748b;
+      margin-top: 6px;
+      border-top: 1px dashed #f1f5f9;
+      padding-top: 4px;
+    }
+    .empty {
+      text-align: center;
+      color: #64748b;
+      padding: 20px 0;
+      font-size: 13px;
+    }
+
+    /* Tabs, date input and settings keep the original compact blue/grey palette. */
+    body { padding-bottom: 72px; }
+    button, input, select { font: inherit; }
+    button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-visible, a:focus-visible {
+      outline: 2px solid #0284c7; outline-offset: 2px;
+    }
+    .status-bar { gap: 8px; }
+    .sync-actions { display: flex; align-items: center; gap: 8px; margin: -3px 0 9px; font-size: 11px; }
+    .sync-actions .source-date { color: #64748b; flex: 1; }
+    .sync-actions a { color: #0369a1; text-decoration: none; }
+    .sync-actions a:hover { text-decoration: underline; }
+    .small-button {
+      border: 1px solid #cbd5e1; border-radius: 5px; background: #fff; color: #0369a1;
+      padding: 5px 8px; cursor: pointer; font-weight: 600; white-space: nowrap;
+    }
+    .small-button:hover { background: #f0f9ff; }
+    .small-button:disabled { opacity: .55; cursor: wait; }
+    .message {
+      margin: 0 0 9px; padding: 8px 10px; border-radius: 6px; border: 1px solid #fcd34d;
+      color: #854d0e; background: #fffbeb; font-size: 11px; line-height: 1.5;
+    }
+    [hidden] { display: none !important; }
+    .date-box {
+      background: #fff; border: 1px solid #e2e8f0; border-radius: 8px;
+      margin-bottom: 10px; overflow: hidden;
+    }
+    .date-summary {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 8px 12px; color: #0369a1; font-size: 12px; font-weight: 700;
+      cursor: pointer; user-select: none; list-style: none;
+    }
+    .date-summary:hover { background: #f1f5f9; }
+    .date-summary::-webkit-details-marker { display: none; }
+    .date-current {
+      display: inline-block; margin-left: 6px; padding: 2px 7px; border-radius: 9px;
+      background: #e0f2fe; color: #0369a1; font-size: 11px; font-weight: 600;
+    }
+    .date-box[open] .chevron-icon { transform: rotate(180deg); }
+    .date-content { padding: 10px; border-top: 1px solid #e2e8f0; }
+    .date-content .custom-date-row { margin: 0; }
+    .date-filter-group { display: grid; grid-template-columns: repeat(3, 1fr); }
+    .date-btn { min-height: 30px; }
+    .custom-date-row { display: flex; gap: 6px; align-items: center; margin: -3px 0 12px; font-size: 11px; color: #475569; }
+    .custom-date-row label { white-space: nowrap; }
+    .custom-date-row input, .settings-date input {
+      min-width: 0; flex: 1; border: 1px solid #cbd5e1; border-radius: 5px;
+      padding: 5px 7px; background: #fff; color: #334155; font-size: 12px;
+    }
+    .profile-help { margin: 9px 0 0; color: #64748b; font-size: 11px; line-height: 1.5; }
+    .profile-field select { width: 100%; }
+    .list-tabs { display: flex; gap: 5px; background: #eaf1f7; border-radius: 8px; padding: 4px; margin-bottom: 10px; }
+    .list-tab {
+      flex: 1; padding: 7px 6px; border: 0; border-radius: 6px; background: transparent;
+      color: #64748b; font-weight: 600; font-size: 12px; cursor: pointer;
+    }
+    .list-tab[aria-selected="true"] { background: white; color: #0369a1; box-shadow: 0 1px 3px rgba(15,23,42,.1); }
+    .tab-count { display: inline-block; margin-left: 4px; color: #64748b; font-size: 11px; font-weight: 500; }
+    .list-heading { color: #334155; font-size: 12px; font-weight: 700; margin: 4px 1px 8px; }
+    .list-section + .list-section { margin-top: 14px; }
+    .list-heading span { color: #64748b; font-weight: 500; }
+    .hw-header { gap: 8px; }
+    .hw-check-title { min-width: 0; }
+    .subject { overflow-wrap: anywhere; }
+    .date-badge { white-space: nowrap; }
+    .verify-note {
+      display: inline-block; margin-top: 4px; padding: 3px 6px; border-radius: 4px;
+      font-size: 10px; line-height: 1.4; color: #92400e; background: #fffbeb;
+    }
+    .settings-button {
+      position: fixed; z-index: 5; right: 15px; bottom: 14px; width: 42px; height: 42px;
+      display: grid; place-items: center; border: 1px solid #0369a1; border-radius: 50%;
+      color: white; background: #0284c7; cursor: pointer; font-size: 21px;
+      box-shadow: 0 4px 14px rgba(3,105,161,.28);
+    }
+    .settings-button:hover { background: #0369a1; }
+    .settings-panel {
+      position: fixed; z-index: 6; right: 14px; bottom: 65px; width: min(340px, calc(100vw - 28px));
+      max-height: max(100px, calc(100vh - 145px)); overflow: auto; padding: 13px;
+      border: 1px solid #cbd5e1; border-radius: 10px; background: #fff;
+      box-shadow: 0 10px 30px rgba(15,23,42,.18); font-size: 12px;
+    }
+    .settings-header {
+      position: sticky; top: -13px; z-index: 2; display: flex; align-items: center; justify-content: space-between;
+      margin: -13px -13px 10px; padding: 13px 13px 9px; background: #fff; border-bottom: 1px solid #f1f5f9;
+    }
+    .settings-header h3 { margin: 0; color: #0f172a; font-size: 14px; }
+    .settings-close { border: 0; background: transparent; color: #64748b; cursor: pointer; font-size: 20px; line-height: 1; }
+    .settings-panel fieldset { padding: 0; margin: 0; border: 0; }
+    .theme-options { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+    .layout-choice.theme-option { margin: 0; align-items: center; min-width: 0; }
+    .layout-choice.theme-option input { margin: 0; }
+    .theme-option span { overflow-wrap: anywhere; }
+    .settings-panel legend, .settings-label { font-weight: 700; color: #475569; margin: 0 0 7px; }
+    .layout-choice {
+      display: flex; gap: 8px; align-items: flex-start; padding: 8px; margin: 4px 0;
+      background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; cursor: pointer;
+    }
+    .layout-choice input { accent-color: #0284c7; margin: 2px 0 0; }
+    .layout-choice strong { display: block; color: #334155; }
+    .layout-choice small { display: block; color: #64748b; margin-top: 2px; }
+    .settings-divider { border: 0; border-top: 1px solid #e2e8f0; margin: 12px 0; }
+    .settings-date { display: flex; gap: 6px; }
+    .settings-help { margin: 6px 0 0; color: #64748b; font-size: 11px; line-height: 1.5; }
+    .beta-pill { display: inline-block; margin-left: 4px; padding: 2px 6px; border-radius: 8px; background: #fef3c7; color: #92400e; font-size: 10px; font-weight: 700; }
+    .tab-beta { color: #b45309; font-size: 10px; }
+    #analysis-section { border: 1px solid #dbe5ef; border-radius: 8px; background: #fff; overflow: hidden; }
+    .analysis-toolbar { padding: 10px; background: #f8fcff; border-bottom: 1px solid #dbe5ef; }
+    .analysis-title { color: #0369a1; font-size: 12px; font-weight: 700; margin-bottom: 8px; }
+    .analysis-toolbar .date-filter-group { margin-bottom: 8px; }
+    .analysis-toolbar .custom-date-row { margin: 0; }
+    .analysis-date-box { margin-bottom: 0; }
+    .analysis-filter-help { margin: 6px 0 0; color: #64748b; font-size: 10px; line-height: 1.45; }
+    .analysis-content { padding: 10px; }
+    .analysis-scope { margin: 0 0 8px; color: #64748b; font-size: 10px; line-height: 1.5; }
+    .analysis-empty { padding: 20px 8px; border-radius: 6px; background: #f8fafc; text-align: center; color: #64748b; font-size: 11px; line-height: 1.5; }
+    .analysis-hero { padding: 10px; border-radius: 8px; background: #eff8ff; border: 1px solid #d5edfb; }
+    .analysis-hero-label { font-size: 10px; color: #475569; font-weight: 600; }
+    .analysis-hero-time { display: flex; align-items: baseline; gap: 8px; margin: 3px 0; }
+    .analysis-hero-time strong { color: #0369a1; font-size: 23px; line-height: 1.1; letter-spacing: -.4px; }
+    .analysis-hero-time span { color: #475569; font-size: 11px; font-weight: 600; }
+    .analysis-hero-note { color: #64748b; font-size: 10px; line-height: 1.4; }
+    .analysis-metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 8px 0; }
+    .analysis-metric { padding: 7px 8px; border: 1px solid #e2e8f0; background: #f8fafc; border-radius: 6px; }
+    .analysis-metric small { display: block; margin-bottom: 3px; color: #64748b; font-size: 10px; }
+    .analysis-metric strong { color: #334155; font-size: 12px; }
+    .analysis-alert, .analysis-note { margin: 7px 0; padding: 6px 7px; border-radius: 5px; font-size: 10px; line-height: 1.45; }
+    .analysis-alert { background: #fffbeb; border: 1px solid #fde68a; color: #92400e; }
+    .analysis-note { background: #f8fafc; color: #64748b; }
+    .analysis-chart { display: flex; align-items: center; gap: 9px; margin: 10px 0; }
+    .analysis-donut { width: 112px; height: 112px; flex: 0 0 112px; }
+    .analysis-donut-number { fill: #0f172a; font: 700 18px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    .analysis-donut-unit { fill: #64748b; font: 10px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    .analysis-legend { min-width: 0; max-height: 145px; overflow: auto; list-style: none; padding: 0; margin: 0; flex: 1; }
+    .analysis-legend-row { display: flex; gap: 6px; align-items: flex-start; margin: 5px 0; }
+    .analysis-dot { display: block; flex: 0 0 8px; width: 8px; height: 8px; border-radius: 50%; margin-top: 3px; }
+    .analysis-legend-label { min-width: 0; color: #334155; font-size: 10px; overflow-wrap: anywhere; }
+    .analysis-legend-label strong, .analysis-legend-label small { display: block; }
+    .analysis-legend-label small { margin-top: 1px; color: #64748b; font-size: 10px; }
+    .analysis-insight { margin: 8px 0; padding: 6px 7px; color: #075985; background: #f0f9ff; border-radius: 5px; font-size: 10px; }
+    .analysis-list-heading { margin: 12px 0 6px; color: #475569; font-size: 11px; font-weight: 700; }
+    .analysis-day { margin-bottom: 6px; border: 1px solid #dbe5ef; border-radius: 6px; overflow: hidden; }
+    .analysis-day-summary { display: flex; align-items: center; gap: 5px; padding: 8px; background: #f8fafc; cursor: pointer; list-style: none; }
+    .analysis-day-summary::-webkit-details-marker { display: none; }
+    .analysis-day-summary::before { content: '▸'; color: #64748b; font-size: 11px; transition: transform .15s; }
+    .analysis-day[open] .analysis-day-summary::before { transform: rotate(90deg); }
+    .analysis-day-date { color: #0369a1; font-size: 11px; font-weight: 700; }
+    .analysis-day-total { margin-left: auto; color: #475569; text-align: right; font-size: 10px; line-height: 1.4; }
+    .analysis-task-list { list-style: none; margin: 0; padding: 0 9px 3px; }
+    .analysis-task { padding: 7px 0; border-top: 1px solid #e2e8f0; }
+    .analysis-task-title { display: flex; justify-content: space-between; gap: 6px; color: #0369a1; font-size: 11px; }
+    .analysis-task-duration { flex: none; color: #475569; font-weight: 600; }
+    .analysis-task-content { color: #334155; font-size: 10px; line-height: 1.45; margin: 3px 0; white-space: pre-line; overflow-wrap: anywhere; }
+    .analysis-task-date { color: #64748b; font-size: 10px; }
+    .analysis-task-warning { margin-top: 4px; padding: 3px 5px; border-radius: 4px; background: #fffbeb; color: #92400e; font-size: 10px; line-height: 1.4; }
+
+
+    /* Applied after Chrome finishes sizing the action popup when available screen
+       space is smaller than 800 × 600; avoids a second, horizontal scrollbar. */
+    html.constrained-screen { min-width: 0; min-height: 0; width: var(--fit-width); height: var(--fit-height); }
+
+    /* Wide-popup layout: preserve the original palette and sections; adapt rather
+       than stretching controls or applying browser zoom. */
+    .hw-card, .hw-check-title, .analysis-facts, .analysis-chart { min-width: 0; }
+    .content, .message, .analysis-alert, .analysis-note, .analysis-insight { overflow-wrap: anywhere; }
+    .analysis-task-title strong, .analysis-day-date, .analysis-day-total { min-width: 0; overflow-wrap: anywhere; }
+    .hw-header { gap: 8px; }
+    .date-badge { flex: none; }
+    .footer { gap: 4px 12px; flex-wrap: wrap; }
+    .analysis-donut { aspect-ratio: 1 / 1; }
+    @media (min-width: 680px) {
+      body { padding: 16px 18px 76px; }
+      .header { top: -16px; margin: -16px -18px 8px; padding: 16px 18px 10px; }
+      h2 { font-size: 20px; }
+      .author, .status-bar, .sync-actions, .profile-tag, .date-current { font-size: 12px; }
+      .date-summary, .profile-summary, .list-tab, .small-button, .analysis-title { font-size: 13px; }
+      .date-filter-group { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+      .date-btn { min-width: 0; min-height: 34px; font-size: 12px; }
+      .profile-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .profile-field label, .profile-field select, .profile-help { font-size: 12px; }
+      #hw-list, #reminder-list {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+        align-items: start;
+      }
+      #hw-list > .hw-card, #reminder-list > .hw-card { margin: 0; }
+      #hw-list > .empty, #reminder-list > .empty { grid-column: 1 / -1; }
+      .subject { font-size: 14px; }
+      .content { font-size: 13px; }
+      .footer, .date-badge { font-size: 12px; }
+      .analysis-overview { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+      .analysis-chart { margin: 0; padding: 8px; min-height: 156px; border: 1px solid #e2e8f0; border-radius: 8px; background: #f8fafc; }
+      .analysis-donut { width: 140px; height: 140px; flex: 0 0 140px; }
+      .analysis-legend { max-height: 180px; }
+      .analysis-legend-label, .analysis-legend-label small, .analysis-day-date, .analysis-task-title { font-size: 12px; }
+      .analysis-scope, .analysis-hero-label, .analysis-hero-note, .analysis-metric small,
+      .analysis-alert, .analysis-note, .analysis-insight, .analysis-day-total, .analysis-task-content,
+      .analysis-task-date, .analysis-task-warning { font-size: 11px; }
+    }
+
+
+    /* User-selected dark mode. All state is stored locally; no external theme service. */
+    html[data-theme="dark"] { color-scheme: dark; background: #0b1220; }
+    html[data-theme="dark"] body { background: #0b1220; color: #e3edf7; }
+    html[data-theme="dark"] .header { background: #0b1220; border-color: #2d3d53; box-shadow: 0 2px 8px rgba(0,0,0,.3); }
+    html[data-theme="dark"] h2, html[data-theme="dark"] .settings-header h3 { color: #f1f7fc; }
+    html[data-theme="dark"] .status-bar, html[data-theme="dark"] .date-box,
+    html[data-theme="dark"] .profile-content, html[data-theme="dark"] .hw-card,
+    html[data-theme="dark"] .settings-panel, html[data-theme="dark"] .settings-header,
+    html[data-theme="dark"] .dev-tools, html[data-theme="dark"] #analysis-section {
+      background: #152237; border-color: #34475f; color: #dce8f3;
+    }
+    html[data-theme="dark"] .profile-box, html[data-theme="dark"] .profile-summary,
+    html[data-theme="dark"] .list-tabs, html[data-theme="dark"] .analysis-toolbar,
+    html[data-theme="dark"] .analysis-day-summary, html[data-theme="dark"] .analysis-empty,
+    html[data-theme="dark"] .analysis-metric, html[data-theme="dark"] .layout-choice {
+      background: #1b2b40; border-color: #34475f; color: #dce8f3;
+    }
+    html[data-theme="dark"] .date-summary:hover, html[data-theme="dark"] .profile-summary:hover,
+    html[data-theme="dark"] .dev-actions button:hover, html[data-theme="dark"] .small-button:hover { background: #273b53; }
+    html[data-theme="dark"] .date-btn, html[data-theme="dark"] .small-button,
+    html[data-theme="dark"] .profile-field select, html[data-theme="dark"] .custom-date-row input,
+    html[data-theme="dark"] .settings-date input, html[data-theme="dark"] .dev-actions button {
+      background: #1b2b40; border-color: #4b5e76; color: #e4eef8;
+    }
+    html[data-theme="dark"] .date-btn.active { background: #0369a1; border-color: #38bdf8; color: #fff; }
+    html[data-theme="dark"] .list-tab { color: #b5c6d8; }
+    html[data-theme="dark"] .list-tab[aria-selected="true"] { background: #2a425d; color: #b8e8ff; }
+    html[data-theme="dark"] .date-current { background: #114569; color: #c6ebff; }
+    html[data-theme="dark"] .date-summary, html[data-theme="dark"] .profile-summary,
+    html[data-theme="dark"] .analysis-title, html[data-theme="dark"] .subject,
+    html[data-theme="dark"] .analysis-day-date, html[data-theme="dark"] .analysis-task-title,
+    html[data-theme="dark"] .sync-actions a, html[data-theme="dark"] .dev-message { color: #91d9ff; }
+    html[data-theme="dark"] .author, html[data-theme="dark"] .profile-tag,
+    html[data-theme="dark"] .update-time, html[data-theme="dark"] .sync-actions .source-date,
+    html[data-theme="dark"] .chevron-icon, html[data-theme="dark"] .tab-count,
+    html[data-theme="dark"] .profile-help, html[data-theme="dark"] .settings-help,
+    html[data-theme="dark"] .layout-choice small, html[data-theme="dark"] .analysis-filter-help,
+    html[data-theme="dark"] .analysis-scope, html[data-theme="dark"] .analysis-hero-note,
+    html[data-theme="dark"] .analysis-metric small, html[data-theme="dark"] .analysis-legend-label small,
+    html[data-theme="dark"] .analysis-task-date, html[data-theme="dark"] .dev-mode-state,
+    html[data-theme="dark"] .dev-help, html[data-theme="dark"] .footer,
+    html[data-theme="dark"] .empty, html[data-theme="dark"] .list-heading span { color: #b4c5d5; }
+    html[data-theme="dark"] .content, html[data-theme="dark"] .profile-field label,
+    html[data-theme="dark"] .settings-panel legend, html[data-theme="dark"] .settings-label,
+    html[data-theme="dark"] .layout-choice strong, html[data-theme="dark"] .list-heading,
+    html[data-theme="dark"] .analysis-hero-label, html[data-theme="dark"] .analysis-hero-time span,
+    html[data-theme="dark"] .analysis-metric strong, html[data-theme="dark"] .analysis-legend-label,
+    html[data-theme="dark"] .analysis-list-heading, html[data-theme="dark"] .analysis-day-total,
+    html[data-theme="dark"] .analysis-task-duration, html[data-theme="dark"] .analysis-task-content,
+    html[data-theme="dark"] .custom-date-row, html[data-theme="dark"] .dev-summary { color: #d6e4ef; }
+    html[data-theme="dark"] .sync-badge.synced { color: #6ee7b7; }
+    html[data-theme="dark"] .sync-badge.syncing { color: #fcd34d; }
+    html[data-theme="dark"] .sync-badge.error { color: #fca5a5; }
+    html[data-theme="dark"] .sync-badge.pending { color: #b4c5d5; }
+    html[data-theme="dark"] .date-badge { color: #9cf2d2; background: #104437; }
+    html[data-theme="dark"] .hw-card.completed { background: #1a293b; border-color: #40516a; opacity: .8; }
+    html[data-theme="dark"] .hw-card.completed .content, html[data-theme="dark"] .hw-card.completed .subject { color: #a4b5c8; }
+    html[data-theme="dark"] .footer, html[data-theme="dark"] .settings-divider,
+    html[data-theme="dark"] .profile-content, html[data-theme="dark"] .date-content,
+    html[data-theme="dark"] .analysis-task { border-color: #34475f; }
+    html[data-theme="dark"] .analysis-day { border-color: #40516a; }
+    html[data-theme="dark"] .analysis-hero { background: #0d314a; border-color: #275c7c; }
+    html[data-theme="dark"] .analysis-hero-time strong { color: #91d9ff; }
+    html[data-theme="dark"] .analysis-chart { background: #19283d; border-color: #34475f; }
+    html[data-theme="dark"] .analysis-donut-number { fill: #f1f7fc; }
+    html[data-theme="dark"] .analysis-donut-unit { fill: #b4c5d5; }
+    html[data-theme="dark"] .analysis-donut circle:first-child { stroke: #3c4f64; }
+    html[data-theme="dark"] .analysis-insight { color: #b8e8ff; background: #153a55; }
+    html[data-theme="dark"] .analysis-note { color: #d2dfec; background: #243449; }
+    html[data-theme="dark"] .message, html[data-theme="dark"] .verify-note,
+    html[data-theme="dark"] .analysis-alert, html[data-theme="dark"] .analysis-task-warning {
+      color: #fde8a4; background: #4b3513; border-color: #806329;
+    }
+    html[data-theme="dark"] .beta-pill { color: #ffe5a3; background: #4b3513; border-color: #806329; }
+    html[data-theme="dark"] .tab-beta { color: #fcd34d; }
+    html[data-theme="dark"] .settings-close { color: #c4d3e2; }
+    html[data-theme="dark"] button:focus-visible, html[data-theme="dark"] input:focus-visible,
+    html[data-theme="dark"] select:focus-visible, html[data-theme="dark"] summary:focus-visible,
+    html[data-theme="dark"] a:focus-visible { outline-color: #7dd3fc; }
+
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="header-title-group">
+      <h2 id="brand-title" tabindex="0">Better.SMS</h2>
+      <div class="author">BetterSMS_1.9.1</div>
+    </div>
+    <span id="total-count" class="badge">0 項</span>
+  </div>
+
+  <div class="status-bar">
+    <span id="sync-status" class="sync-badge pending" role="status" aria-live="polite">🟠 等待 SMS 頁面</span>
+    <span id="last-updated" class="update-time">最後更新：尚未同步</span>
+  </div>
+  <div class="sync-actions">
+    <span id="source-date" class="source-date">尚未載入資料</span>
+    <a id="open-sms" href="https://sms.twghlkss.edu.hk/student/records.php?feature=homework" target="_blank" rel="noopener noreferrer">開啟 SMS ↗</a>
+    <button id="refresh" class="small-button" type="button">↻ 重新整理</button>
+  </div>
+  <div id="sync-message" class="message" role="status" hidden></div>
+
+
+
+  <details class="date-box" id="date-accordion">
+    <summary class="date-summary">
+      <span>日期篩選 <span id="date-filter-summary" class="date-current">全部已載入</span></span>
+      <span class="chevron-icon" aria-hidden="true">▼</span>
+    </summary>
+    <div class="date-content">
+      <div class="date-filter-group" aria-label="日期篩選">
+        <button type="button" class="date-btn active" data-date-filter="ALL">全部已載入</button>
+        <button type="button" class="date-btn" data-date-filter="TODAY">今天</button>
+        <button type="button" class="date-btn" data-date-filter="TOMORROW">明天</button>
+        <button type="button" class="date-btn" data-date-filter="NEXT_SCHOOL_DAY" title="只跳過週末，未計算公眾假期或學校假期">下個上學天</button>
+        <button type="button" class="date-btn" data-date-filter="NEXT_7_DAYS" title="包括今天在內的 7 天">未來 7 天</button>
+        <button type="button" class="date-btn" data-date-filter="NEXT_WEEK" title="下一個星期一至星期日">下星期</button>
+      </div>
+      <div class="custom-date-row">
+        <label for="custom-date">指定日期：</label>
+        <input id="custom-date" type="date">
+        <button id="apply-custom-date" class="small-button" type="button">查看該日</button>
+      </div>
+    </div>
+  </details>
+
+  <details class="profile-box" id="profile-accordion">
+    <summary class="profile-summary">
+      <div>📚 選科設定：<span id="profile-summary-tag" class="profile-tag">全部組別（未設定）</span></div>
+      <span class="chevron-icon">▼</span>
+    </summary>
+    <div class="profile-content">
+      <div class="profile-grid">
+        <div class="profile-field">
+          <label for="profile-math">Mathematics 數學組別：</label>
+          <select id="profile-math">
+            <option value="ALL">全部組別（未設定）</option>
+            <option value="Gp1">G1 (CPC) · M1</option><option value="Gp2">G2 (SYT) · M2</option>
+            <option value="Gp3">G3 (AWY) · 不修讀 M1/M2</option><option value="Gp4">G4 (NOK) · 不修讀 M1/M2</option>
+            <option value="Gp5">G5 (TKP) · 不修讀 M1/M2</option><option value="Gp6">G6 (HWS) · 不修讀 M1/M2</option>
+          </select>
+        </div>
+        <div class="profile-field">
+          <label for="profile-x1">X1 科目：</label>
+          <select id="profile-x1">
+            <option value="ALL">全部 X1（未設定）</option>
+            <option value="PHY" data-subject-name="Physics">Physics 物理 (LWY)</option><option value="CHEM" data-subject-name="Chemistry">Chemistry 化學 (LCO)</option>
+            <option value="HIST" data-subject-name="History">History 歷史 (TKY)</option><option value="CHIS" data-subject-name="Chinese History">Chinese History 中史 (HKC)</option>
+            <option value="JAP" data-subject-name="Japanese">Japanese 日語 (ATH)</option><option value="ECON" data-subject-name="Economics">Economics 經濟 (TYN)</option>
+          </select>
+        </div>
+        <div class="profile-field">
+          <label for="profile-x2">X2 科目：</label>
+          <select id="profile-x2">
+            <option value="ALL">全部 X2（未設定）</option>
+            <option value="BAFS" data-subject-name="Business, Accounting and Financial Studies">Business, Accounting and Financial Studies 企會財 (TPY)</option><option value="BIO" data-subject-name="Biology">Biology 生物 (YSL)</option>
+            <option value="CHEM" data-subject-name="Chemistry">Chemistry 化學 (PTW)</option><option value="CHIS" data-subject-name="Chinese History">Chinese History 中史 (WCL)</option>
+            <option value="TH" data-subject-name="Tourism and Hospitality Studies">Tourism and Hospitality Studies 旅航 (CLY)</option><option value="VA" data-subject-name="Visual Arts">Visual Arts 視覺藝術 (LNF)</option>
+          </select>
+        </div>
+        <div class="profile-field">
+          <label for="profile-x3">X3 科目：</label>
+          <select id="profile-x3">
+            <option value="ALL">全部 X3（未設定）</option>
+            <option value="BIO" data-subject-name="Biology">Biology 生物 (NWK)</option><option value="ECON" data-subject-name="Economics">Economics 經濟 (LYK)</option>
+            <option value="GEOG" data-subject-name="Geography">Geography 地理 (LHH)</option><option value="HIST" data-subject-name="History">History 歷史 (ATH)</option>
+            <option value="ICT" data-subject-name="Information and Communication Technology">Information and Communication Technology 資訊科技 (YMT)</option><option value="PHY" data-subject-name="Physics">Physics 物理 (FHM)</option>
+          </select>
+        </div>
+
+      </div>
+      <p class="profile-help">G1 自動包含 M1；G2 自動包含 M2；G3–G6 不修讀 M1／M2。功課和提醒使用同一套選科。中文、英文和 STEAM 一律顯示；未設定的組別不會過濾；其他無法辨識的項目會保留並提示核對。</p>
+    </div>
+  </details>
+
+  <div id="list-tabs" class="list-tabs" role="tablist" aria-label="功課、提醒和時間分析">
+    <button type="button" id="tab-homework" class="list-tab" role="tab" aria-controls="homework-section" aria-selected="true"><span id="homework-tab-label">功課</span> <span id="tab-homework-count" class="tab-count">0</span></button>
+    <button type="button" id="tab-reminders" class="list-tab" role="tab" aria-controls="reminders-section" aria-selected="false" tabindex="-1">提醒 <span id="tab-reminders-count" class="tab-count">0</span></button>
+    <button type="button" id="tab-analysis" class="list-tab" role="tab" aria-controls="analysis-section" aria-selected="false" tabindex="-1">時間分析 <span class="tab-beta">β</span></button>
+  </div>
+  <div id="lists-panel" role="presentation">
+    <section id="homework-section" class="list-section" role="tabpanel" aria-labelledby="tab-homework">
+      <div class="list-heading" id="homework-heading" hidden>功課 <span id="homework-section-count"></span></div>
+      <div id="hw-list"><div class="empty">載入中…</div></div>
+    </section>
+    <section id="reminders-section" class="list-section" role="tabpanel" aria-labelledby="tab-reminders" hidden>
+      <div class="list-heading" id="reminders-heading" hidden>提醒 <span id="reminders-section-count"></span></div>
+      <div id="reminder-list"><div class="empty">載入中…</div></div>
+    </section>
+  </div>
+  <section id="analysis-section" role="tabpanel" aria-labelledby="tab-analysis" hidden>
+    <div class="analysis-toolbar">
+      <div class="analysis-title">◉ 功課時間分析 <span class="beta-pill">測試版</span></div>
+      <details class="date-box analysis-date-box" id="analysis-date-accordion">
+        <summary class="date-summary">
+          <span>日期篩選 <span id="analysis-date-summary" class="date-current">全部已載入</span></span>
+          <span class="chevron-icon" aria-hidden="true">▼</span>
+        </summary>
+        <div class="date-content">
+          <div class="date-filter-group" aria-label="時間分析日期篩選">
+            <button type="button" class="date-btn" data-date-filter="ALL">全部已載入</button>
+            <button type="button" class="date-btn" data-date-filter="TODAY">今天</button>
+            <button type="button" class="date-btn" data-date-filter="TOMORROW">明天</button>
+            <button type="button" class="date-btn" data-date-filter="NEXT_SCHOOL_DAY" title="只跳過週末，未計算公眾假期或學校假期">下個上學天</button>
+            <button type="button" class="date-btn" data-date-filter="NEXT_7_DAYS" title="包括今天在內的 7 天">未來 7 天</button>
+            <button type="button" class="date-btn" data-date-filter="NEXT_WEEK" title="下一個星期一至星期日">下星期</button>
+          </div>
+          <div class="custom-date-row">
+            <label for="analysis-custom-date">指定日期：</label>
+            <input id="analysis-custom-date" type="date">
+            <button id="analysis-apply-custom-date" class="small-button" type="button">查看該日</button>
+          </div>
+          <p class="analysis-filter-help">日期與功課／提醒共用。下個上學天只跳過週末，不包括假期。</p>
+        </div>
+      </details>
+    </div>
+    <div id="analysis-content" class="analysis-content"></div>
+  </section>
+
+  <button id="settings-button" class="settings-button" type="button" aria-label="Better.SMS 設定" aria-controls="settings-panel" aria-haspopup="dialog" aria-expanded="false" title="Better.SMS 設定">⚙</button>
+  <div id="settings-panel" class="settings-panel" role="dialog" aria-label="Better.SMS 設定" hidden>
+    <div class="settings-header"><h3>Better.SMS 設定</h3><button id="settings-close" class="settings-close" type="button" aria-label="關閉設定">×</button></div>
+    <fieldset>
+      <legend>外觀模式</legend>
+      <div class="theme-options">
+        <label class="layout-choice theme-option"><input type="radio" name="theme" value="light" checked><span><strong>☀ 淺色（白色）</strong></span></label>
+        <label class="layout-choice theme-option"><input type="radio" name="theme" value="dark"><span><strong>☾ 深色（黑暗）</strong></span></label>
+      </div>
+    </fieldset>
+    <hr class="settings-divider">
+    <fieldset>
+      <legend>功課與提醒的顯示方式</legend>
+      <label class="layout-choice"><input type="radio" name="view-mode" value="tabs"><span><strong>頁籤模式</strong><small>切換查看功課或提醒</small></span></label>
+      <label class="layout-choice"><input type="radio" name="view-mode" value="stacked"><span><strong>上下分區</strong><small>同時顯示兩個清單</small></span></label>
+    </fieldset>
+    <hr class="settings-divider">
+    <div class="settings-label"><label for="fetch-from-date">SMS 載入起始日期</label></div>
+    <div class="settings-date"><input id="fetch-from-date" type="date"><button id="apply-from-date" class="small-button" type="button">載入</button></div>
+    <p class="settings-help">SMS 只返回這天及之後的資料。若篩選更早日期，會自動往前載入。下個上學天只跳過週末，未計算假期。</p>
+    <p class="settings-help">資料及設定儲存在此瀏覽器；請勿與他人共用已登入的帳戶。</p>
+    <hr class="settings-divider">
+    <details class="dev-tools" id="developer-tools">
+      <summary class="dev-summary">
+        <span>🛠 開發者模式</span>
+        <span id="dev-mode-state" class="dev-mode-state">關閉</span>
+      </summary>
+      <div class="dev-content">
+        <label class="dev-toggle-row" for="dev-mode-toggle"><input id="dev-mode-toggle" type="checkbox">啟用開發者模式</label>
+        <p class="dev-help">顯示抓取診斷，並可手動重新抓取。診斷不包含功課或提醒內容。</p>
+        <div id="dev-panel" hidden>
+          <pre id="dev-diagnostics" class="dev-diagnostics">等待同步診斷資料…</pre>
+          <div class="dev-actions">
+            <button id="dev-refresh" type="button">重新抓取</button>
+            <button id="dev-copy" type="button">複製診斷資料</button>
+          </div>
+          <span id="dev-message" class="dev-message" aria-live="polite"></span>
+        </div>
+      </div>
+    </details>
+  </div>
+
+  <script src="date-utils.js"></script>
+  <script src="homework-parser.js"></script>
+  <script src="sms-document.js"></script>
+  <script src="sms-client.js"></script>
+  <script src="subject-filter.js"></script>
+  <script src="analysis-utils.js"></script>
+  <script src="analysis-ui.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>
